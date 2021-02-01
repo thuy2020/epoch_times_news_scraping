@@ -1,0 +1,16 @@
+---
+title: "Untitled"
+author: "Thuy Nguyen"
+date: "1/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tuber)
+yt_oauth("905791599093-vrv1sutqnbj7275pdm4lbb35tidbl4h4.apps.googleusercontent.com", "yrKja27QCL1OpRXz3i82pPkx")
+```
+
