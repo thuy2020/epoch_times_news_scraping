@@ -114,10 +114,9 @@ get_features(article)
 
 ```
 
-# Function to get all article links from one page
+# Function to get all 27 links from one page
 
 ```{r get_article_links}
-
 # need to get all the links of post_list in a page, then get html of each link 
 # <li class="post_list">  --> <a title= "mcbvksd" href="a link inside"
 get_article_links <- function(url) {
@@ -159,54 +158,65 @@ urls_clean <- str_replace(urls_char,
 return(urls_clean)
 }
 
-get_article_links(url = "https://www.theepochtimes.com/c-us-politics/3")
+links_in_one_page <- get_article_links(url = "https://www.theepochtimes.com/c-us-politics/3")
 ```
 
-# Get all pages
+# A for loop to get get all 27 articles from one page
 
-```{r get all the urls of articles in 1 page }
+```{r for loop getting all articles in 1 page}
+
+for (url in links_in_one_page) {
+  # Define a delayed read_html() function with a delay of 1s
+  # read_html_delayed <- slowly(read_html, 
+  #                           rate = rate_delay(1))
+  # url <- read_html_delayed(url) --> not running???
+  article <- get_article(url = url, save = TRUE, path = "test.html")
+  result  <- get_features(article)
+  
+  # need to bind all ???
+  print(result)
+}
+#problem:  some returns 0 row
+```
+
+# Get all urls of politics section
+
+```{r get_page_link, }
+# A funtion to get page links
 get_page_link <- function(page) {
   link <- "https://www.theepochtimes.com/c-us-politics"
   if(page > 1) {
     link <- paste0(link, "/", page)
   }
-  
-  link
+    link
 }
+# Get some page links, map through a vector of all pages 2:683
+all_page_links <- map_chr(2:10, get_page_link) 
 
-get_page_link(3)
+# get all article links from above page links, 
+all_article_links <- map(all_page_links[4:5], get_article_links) %>% 
+                    unlist() # to solve problem: list of list every 27 links nested in a list 
 
-all_page_links <- map_chr(1:677, get_page_link)
+# --> problem: some links are not clean
 
-map(all_page_links[1:5], get_links)
+for (url in all_article_links) {
+  article <- get_article(url, save = TRUE, path = "test.html")
+  result <- get_features(article)
+  print(result)
+}
+ # --> problem: empty rows
 
 ```
 
-```{r extract needed infrom from a page }
-# Define a delayed read_html() function with a delay of 1s
-read_html_delayed <- slowly(read_html, 
-                            rate = rate_delay(1))
 
-# A loop that goes over all urls in a list of urls
-
-for(url in urls_clean){
- # html <- read_html_delayed(url) can't run 
- article <- web_scraping(url, save = TRUE, path = NULL)
- #features <- extract_features(article) 
- return (article) 
-}
-
-read_html_delayed(urls_clean)
-
-```
 
 ```{r analysis}
-
 tbl %>% 
   unnest_tokens(word, content) %>% 
   anti_join(stop_words) %>% 
   count(word, sort = TRUE)
   View()
+  
 ```
 
 
