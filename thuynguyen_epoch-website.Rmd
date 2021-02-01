@@ -35,13 +35,14 @@ library(rvest)
 library(tidyverse)
 library(xml2)
 library(httr) 
+library(tidytext)
 ```
 
-# Function to get one article 
+# Function to get one article from a link 
 
-```{r a function to get an article}
-# write a function to get an article (adapted from ICPSR course, link: )
-web_scraping <- function(url, save = TRUE, path = NULL){
+```{r get_article}
+# a function to get an article (adapted from ICPSR 2020 course, link: )
+get_article <- function(url, save = TRUE, path = NULL){
   page = httr::GET(url)
   page_content = httr::content(page, "text")
   if(save == TRUE){
@@ -49,31 +50,31 @@ web_scraping <- function(url, save = TRUE, path = NULL){
                 col.names = FALSE,
                 row.names = FALSE,
                 quote = FALSE,
-                file = path)
+                file = path
+                )
   }
   return(page_content)
 }
 
-# get one article
-article <- web_scraping(url = "https://www.theepochtimes.com/trump-grants-full-pardon-to-al-pirro-former-husband-of-fox-news-host-jeanine-pirro_3664393.html", 
-             save = TRUE,
-             path = "article.html")
+# get one article from a link
+article <- get_article(url = "https://www.theepochtimes.com/trump-grants-full-pardon-to-al-pirro-former-husband-of-fox-news-host-jeanine-pirro_3664393.html", save = TRUE, path = "data.html") # how to save all articles in a folder?
 
-# read in as html file 
-article_html <- read_html(article)
 ```
 
-# Get information needed in one article that is in html format
+# Function to extract features of interest from one article
 
-```{r extract info in a html file}
+```{r get_features}
+get_features <- function(article) {
+# read in as html file 
+article_html <- read_html(article)
+
 # get title
 title <- article_html %>% 
   xml_find_all("//title") %>% 
   html_text()
 
-# get keywords <meta name="keywords" using a xpath--> how to get up to "keywords"???
-keyword <- xml_find_all(article_html, xpath = "//meta/@name/@content")
-html_nodes(css = "#content")
+# get autho's name <p><em> --> Get node <em> then extract the text
+autho_name <- html_text(xml_find_all(article_html, "//em"))
 
 # get post content class using . <div class="post_content">
 post_content <- article_html %>% 
@@ -89,10 +90,6 @@ publish_date_update <- article_html %>%
   html_nodes(css = ".update") %>% 
   html_text()
 
-# get share count <div id="share_counts" class="share_counts">
-share_count <- html_nodes(article_html, css = "#share_counts")
-html_text(share_count) #???
-
 # get autho's name <p><em> --> Get node <em> then extract the text
 autho_name <- html_text(xml_find_all(article_html, "//em"))
 
@@ -102,49 +99,38 @@ description <- article_html %>%
   html_nodes(xpath = '//*[@id="main"]/div/div/div[1]/div[1]/div[2]/div[5]/p[1]') %>% 
   html_text()
 
-# make a df --> this is a matrix
-article_df <- cbind(title, description, post_content, publish_date, publish_date_update, autho_name)
-
-tbl <- tibble(title = title, 
+tbl <- tibble(
+       title = title, 
        author = autho_name, 
        publish_date = lubridate::mdy(publish_date),
        publish_update = lubridate::mdy(gsub("Updated: ", "", publish_date_update)),
        description = description,
        content = post_content)
 
-library(tidytext)
-tbl %>% 
-  unnest_tokens(word, content) %>% 
-  anti_join(stop_words) %>% 
-  count(word, sort = TRUE)
-  View()
+return (tbl)
+}
+
+get_features(article)
+
 ```
 
-# Get all urls in one page
+# Function to get all article links from one page
 
-```{r get all the urls of articles in 1 page }
-get_page_link <- function(page) {
-  link <- "https://www.theepochtimes.com/c-us-politics"
-  if(page > 1) {
-    link <- paste0(link, "/", page)
-  }
-  link
-}
-all_page_links <- map_chr(1:677, get_page_link)
-
-map(all_page_links[1:5], get_links)
+```{r get_article_links}
 
 # need to get all the links of post_list in a page, then get html of each link 
 # <li class="post_list">  --> <a title= "mcbvksd" href="a link inside"
-first_page <- web_scraping(url = "https://www.theepochtimes.com/c-us-politics",
-                              save = TRUE, 
-                         path = "first_page.html")
+get_article_links <- function(url) {
+  
+one_page <- get_article(url = url,
+                        save = TRUE, 
+                        path = "first_page.html")
 # convert to html file to extract elements in it. 
-first_page <- read_html(first_page)
+one_page <- read_html(one_page)
 
 # get all the articles' links in this page
 # go to all element that have class = "post_list", then go to the "a" descendant in the first position. ---> get 27 X 3 = 81 lines, 3 for each article 
-raw_list <- first_page %>% 
+raw_list <- one_page %>% 
   html_nodes(xpath = "//*[@class = 'post_list']//a[position() = 1]") 
 
 # extract the link, starting the second in the list, increment by 3, 
@@ -170,100 +156,66 @@ urls_clean <- str_replace(urls_char,
            pattern = '\"', 
            replacement = "")
 
-```
-
-# Use a set of links of articles to extract element in each article
-
-```{r extract needed info from an example set of links}
-library(httr)
-
-test_urls <- c("https://www.theepochtimes.com/law-professor-dershowitz-outlines-legal-possibilities-for-senate-on-upcoming-trump-impeachment-trial_3668584.html", 
-              "https://www.theepochtimes.com/sen-rubio-criticizes-biden-for-talking-like-a-centrist-but-taking-far-left-actions_3667932.html", 
-              "https://www.theepochtimes.com/west-virginia-governor-wants-to-boost-vaccine-administration-to-at-least-5-million-per-day_3668462.html")
-
-# Define a delayed read_html() function with a delay of 0.5s
-read_html_delayed <- slowly(read_html, 
-                            rate = rate_delay(1))
-
-# A loop that goes over all page urls
-
-for(url in test_urls){
-  html <- read_html_delayed(url)
-  # get title in each article
-title <- html %>% 
-  xml_find_all("//title") %>% 
-  html_text()
-
- # get post content 
-post_content <- html %>% 
-  html_nodes(css = ".post_content") %>% 
-  html_text
-
-# get date publish & update 
-publish_date <- html %>% 
-  html_nodes(css = ".publish") %>% 
-  html_text()
-
-publish_date_update <- html %>% 
-  html_nodes(css = ".update") %>% 
-  html_text()
-
-# get autho's name 
-autho_name <- html_text(xml_find_all(html, "//em"))
-
-# get description 
-description <- html %>% 
-html_nodes(xpath = '//meta[@name = "description"]') 
-
-# make a df
-article_df <- cbind(title, description, post_content, publish_date, publish_date_update, autho_name)
-
-print(article_df)
+return(urls_clean)
 }
+
+get_article_links(url = "https://www.theepochtimes.com/c-us-politics/3")
 ```
 
+# Get all pages
+
+```{r get all the urls of articles in 1 page }
+get_page_link <- function(page) {
+  link <- "https://www.theepochtimes.com/c-us-politics"
+  if(page > 1) {
+    link <- paste0(link, "/", page)
+  }
+  
+  link
+}
+
+get_page_link(3)
+
+all_page_links <- map_chr(1:677, get_page_link)
+
+map(all_page_links[1:5], get_links)
+
+```
 
 ```{r extract needed infrom from a page }
-# Define a delayed read_html() function with a delay of 0.5s
+# Define a delayed read_html() function with a delay of 1s
 read_html_delayed <- slowly(read_html, 
                             rate = rate_delay(1))
 
-# A loop that goes over all page urls
+# A loop that goes over all urls in a list of urls
 
 for(url in urls_clean){
-  html <- read_html_delayed(url)
-  # get title in each article
-title <- html %>% 
-  xml_find_all("//title") %>% 
-  html_text()
-
- # get post content 
-post_content <- html %>% 
-  html_nodes(css = ".post_content") %>% 
-  html_text
-
-# get date publish & update 
-publish_date <- html %>% 
-  html_nodes(css = ".publish") %>% 
-  html_text()
-
-publish_date_update <- html %>% 
-  html_nodes(css = ".update") %>% 
-  html_text()
-
-# get autho's name 
-autho_name <- html_text(xml_find_all(html, "//em"))
-
-# get description 
-description <- html %>% 
-html_nodes(xpath = '//meta[@name = "description"]') 
-
-# make a df
-article_df <- cbind(title, description, post_content, publish_date, publish_date_update, autho_name)
-
-print(article_df)
+ # html <- read_html_delayed(url) can't run 
+ article <- web_scraping(url, save = TRUE, path = NULL)
+ #features <- extract_features(article) 
+ return (article) 
 }
 
-str(article_df)
+read_html_delayed(urls_clean)
+
 ```
 
+```{r analysis}
+
+tbl %>% 
+  unnest_tokens(word, content) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE)
+  View()
+```
+
+
+```{r unresolved}
+# get keywords <meta name="keywords" using a xpath--> how to get up to "keywords"???
+keyword <- xml_find_all(article_html, xpath = "//meta/@name/@content")
+html_nodes(css = "#content")
+
+# get share count <div id="share_counts" class="share_counts">
+share_count <- html_nodes(article_html, css = "#share_counts")
+html_text(share_count) #???
+```
