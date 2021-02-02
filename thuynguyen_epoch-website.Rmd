@@ -208,7 +208,18 @@ for (url in all_article_links) {
 
 ```
 
+# Side bar comment 
 
+```{r}
+# how to get the side bar comments <div id="sidebar_comments"></div>	
+article_html %>% 
+  html_nodes(css = "#sidebar_comments") %>% 
+  html_text
+
+```
+
+
+# Analysis
 
 ```{r analysis}
 tbl %>% 
@@ -219,13 +230,11 @@ tbl %>%
   
 ```
 
+# Other
 
 ```{r unresolved}
 # get keywords <meta name="keywords" using a xpath--> how to get up to "keywords"???
 keyword <- xml_find_all(article_html, xpath = "//meta/@name/@content")
 html_nodes(css = "#content")
 
-# get share count <div id="share_counts" class="share_counts">
-share_count <- html_nodes(article_html, css = "#share_counts")
-html_text(share_count) #???
 ```
