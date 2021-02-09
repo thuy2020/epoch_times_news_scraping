@@ -36,6 +36,7 @@ library(tidyverse)
 library(xml2)
 library(httr) 
 library(tidytext)
+library(stringr)
 ```
 
 # Function to get one article from a link 
@@ -43,22 +44,24 @@ library(tidytext)
 ```{r get_article}
 # a function to get an article (adapted from ICPSR 2020 course, link: )
 get_article <- function(url, save = TRUE, path = NULL){
-  page = httr::GET(url)
-  page_content = httr::content(page, "text")
+  link <- GET(url)
+  content <- httr::content(link, "text")
   if(save == TRUE){
-    write.table(x = page_content,
+    write.table(x = content,
                 col.names = FALSE,
                 row.names = FALSE,
                 quote = FALSE,
                 file = path
                 )
   }
-  return(page_content)
+  return(content)
 }
 
 # get one article from a link
-article <- get_article(url = "https://www.theepochtimes.com/trump-grants-full-pardon-to-al-pirro-former-husband-of-fox-news-host-jeanine-pirro_3664393.html", save = TRUE, path = "data.html") # how to save all articles in a folder?
+article5 <- get_article(url = "https://www.theepochtimes.com/texas-governor-orders-agencies-to-sue-biden-administration-for-climate-actions-that-kill-jobs_3677062.html", save = TRUE, path = "data5.html") 
 
+# how to save all articles in a folder?
+# create path to all articles, loops through those path. 
 ```
 
 # Function to extract features of interest from one article
@@ -72,9 +75,6 @@ article_html <- read_html(article)
 title <- article_html %>% 
   xml_find_all("//title") %>% 
   html_text()
-
-# get autho's name <p><em> --> Get node <em> then extract the text
-autho_name <- html_text(xml_find_all(article_html, "//em"))
 
 # get post content class using . <div class="post_content">
 post_content <- article_html %>% 
@@ -99,19 +99,74 @@ description <- article_html %>%
   html_nodes(xpath = '//*[@id="main"]/div/div/div[1]/div[1]/div[2]/div[5]/p[1]') %>% 
   html_text()
 
-tbl <- tibble(
-       title = title, 
-       author = autho_name, 
-       publish_date = lubridate::mdy(publish_date),
-       publish_update = lubridate::mdy(gsub("Updated: ", "", publish_date_update)),
-       description = description,
-       content = post_content)
+# tbl <- tibble(
+#        title = title, 
+#        author = autho_name, 
+#        publish_date = lubridate::mdy(publish_date),
+#        publish_update = lubridate::mdy(gsub("Updated: ", "", publish_date_update)),
+#        description = description,
+#        content = post_content)
+# ---> the above will not give result of one feature is missing
 
-return (tbl)
+mydata <- cbind(
+       title, 
+       autho_name, 
+       publish_date,
+       publish_date_update,
+       description, post_content)
+
+return (mydata)
 }
 
 get_features(article)
 
+```
+
+
+```{r testing}
+# this link doesn't not give result because author name was not extracted --> need to use cbind instead of tiblle to gather all feature for final result
+article1 <- get_article(url = "https://www.theepochtimes.com/democrats-introduce-bill-to-massively-expand-mail-in-voting_3676994.html", save = TRUE, path = "data1.html") 
+
+get_features(article1)
+
+article_html <- read_html(article1)
+
+# get title
+title <- article_html %>% 
+  xml_find_all("//title") %>% 
+  html_text()
+
+# get autho's name <p><em> --> Get node <em> then extract the text
+autho_name <- html_text(xml_find_all(article_html, "//em"))
+
+# get post content class using . <div class="post_content">
+post_content <- article_html %>% 
+  html_nodes(css = ".post_content") %>% 
+  html_text
+
+# get date publish & update <span class="publish"> 
+publish_date <- article_html %>% 
+  html_nodes(css = ".publish") %>% 
+  html_text()
+
+publish_date_update <- article_html %>% 
+  html_nodes(css = ".update") %>% 
+  html_text()
+
+# get description <meta name="description"
+# select all meta nodes in the tree, then go to their children that have name = description. 
+description <- article_html %>% 
+  html_nodes(xpath = '//*[@id="main"]/div/div/div[1]/div[1]/div[2]/div[5]/p[1]') %>% 
+  html_text()
+
+tbl <- cbind(
+       title, 
+       autho_name, 
+       publish_date,
+       publish_date_update,
+       description, post_content)
+
+class(tbl)
 ```
 
 # Function to get all 27 links from one page
@@ -158,25 +213,26 @@ urls_clean <- str_replace(urls_char,
 return(urls_clean)
 }
 
-links_in_one_page <- get_article_links(url = "https://www.theepochtimes.com/c-us-politics/3")
+links_in_one_page <- get_article_links(url = "https://www.theepochtimes.com/c-us-politics/10")
 ```
 
 # A for loop to get get all 27 articles from one page
 
 ```{r for loop getting all articles in 1 page}
 
-for (url in links_in_one_page) {
-  # Define a delayed read_html() function with a delay of 1s
-  # read_html_delayed <- slowly(read_html, 
-  #                           rate = rate_delay(1))
-  # url <- read_html_delayed(url) --> not running???
-  article <- get_article(url = url, save = TRUE, path = "test.html")
-  result  <- get_features(article)
+for (url in 1:length(links_in_one_page)) {
+# delay function get_article to run slowly
+ get_article_delayed <- slowly(get_article, 
+                             rate = rate_delay(1))
   
-  # need to bind all ???
-  print(result)
+articles <- get_article_delayed(url = links_in_one_page[[url]], save = TRUE, path = "test.html")
+  for (i in articles) {
+    art_features  <- get_features(i)
+  }
+  
+  print(art_features)
 }
-#problem:  some returns 0 row
+
 ```
 
 # Get all urls of politics section
@@ -190,21 +246,35 @@ get_page_link <- function(page) {
   }
     link
 }
-# Get some page links, map through a vector of all pages 2:683
-all_page_links <- map_chr(2:10, get_page_link) 
+# Get some page links, map through a vector of all pages 2:691
+all_page_links <- map_chr(2:691, get_page_link) 
+length(all_page_links)
 
 # get all article links from above page links, 
-all_article_links <- map(all_page_links[4:5], get_article_links) %>% 
-                    unlist() # to solve problem: list of list every 27 links nested in a list 
+all_article_links <- map(all_page_links, slowly(get_article_links,
+                                                     rate = rate_delay(0.2))  
+                         ) %>% 
+                    unlist() 
 
-# --> problem: some links are not clean
+length(all_article_links) # hooray 18657 articles to read
 
-for (url in all_article_links) {
-  article <- get_article(url, save = TRUE, path = "test.html")
-  result <- get_features(article)
-  print(result)
+for (url in 1:length(all_article_links)) {
+# delay function get_article to run slowly 1s
+ get_article_delayed <- slowly(get_article, 
+                             rate = rate_delay(1))
+  
+  articles <- get_article_delayed(url = all_article_links[[url]], save = TRUE, path = "test.html")
+    
+  for (i in articles) {
+    # delay function get_features to run slowly 1s
+    get_features_delayed <- slowly(get_features, 
+                                   rate = rate_delay(1))
+    
+    art_features  <- get_features_delayed(i)
+  }
+  
+  print(art_features)
 }
- # --> problem: empty rows
 
 ```
 
@@ -215,6 +285,10 @@ for (url in all_article_links) {
 article_html %>% 
   html_nodes(css = "#sidebar_comments") %>% 
   html_text
+
+article_html %>% 
+html_nodes(xpath = "/html/body/main") %>% 
+  html_text()
 
 ```
 
