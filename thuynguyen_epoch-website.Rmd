@@ -7,24 +7,19 @@ output: html_document
 ## Project's goals
 Goal 1: Scraping articles from the website https://www.theepochtimes.com/c-us-politics, extracting needed information, and putting them into an appropriate format to conduct text analysis. This is a part of a bigger research project in collaboration with the US-Vietnam Research Center, UO. 
 Goal 2: Writing a package to scrape articles from a news website.
-
-## Progress made: 
-- Getting one article from a link
-- Getting a set of links from 1 page (out of total 387 pages needed)
-- Extracting needed information from 1 article to be used for text analysis
+## Progress made:- wrote functions to get articles links, page links, extracting article features of interest.
+- Fixed empty rows problem
+- Got all article links from 691 pages in the politics section. Stored this into an RDS file (all_article_links.RDS) for later use.
+- Started to get the article features of interest using a set of articles links
 
 ## To do tasks: 
+- Some article links are not clean, which prevents getting the exact article features. These links need to be sorted out and fixed.
+- Extract all articles features of interest from the links in all_article_links.RDS.
 
-- Get all links from 387 pages in politics section: https://www.theepochtimes.com/c-us-politics
-- Get all articles from these 387 pages
-- Extracting needed information from these articles
-- Converting extracted information into an appropriate format for text analysis 
-
-## Would like to discuss: 
-
-- The feasibility/ necessity of goal 2 
-- the accuracy of the work I have done below. 
-- Other tasks to fulfill EDLD 609's requirements. 
+## Would like to discuss:
+- I'm trying to get the above 2 tasks by this weekend. I hope you will have time to give me some feedback then. 
+- Should I adjust goal #2? I was thinking that after achieving goal #1, whether it is more appropriate to produce an interactive report rather than pulling up (rather simple) functions into a package. 
+ 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -237,7 +232,7 @@ articles <- get_article_delayed(url = links_in_one_page[[url]], save = TRUE, pat
 
 # Get all urls of politics section
 
-```{r get_page_link, }
+```{r get_page_link function, all_article_links}
 # A funtion to get page links
 get_page_link <- function(page) {
   link <- "https://www.theepochtimes.com/c-us-politics"
@@ -246,9 +241,8 @@ get_page_link <- function(page) {
   }
     link
 }
-# Get some page links, map through a vector of all pages 2:691
+# Get page links, map through a vector of all pages 2:691
 all_page_links <- map_chr(2:691, get_page_link) 
-length(all_page_links)
 
 # get all article links from above page links, 
 all_article_links <- map(all_page_links, slowly(get_article_links,
@@ -256,12 +250,34 @@ all_article_links <- map(all_page_links, slowly(get_article_links,
                          ) %>% 
                     unlist() 
 
-length(all_article_links) # hooray 18657 articles to read
+length(all_article_links) # hoorray 18657 articles to read
 
+# save and restore 
+saveRDS(all_article_links, file = "all_article_links")
+
+# need to make sure all the links are clean, 
+
+# random checking reveals that some links are not clean. Fore example: 
+somelinks <- all_article_links[1000:1003]
+
+#using rebus 
+library(rebus)
+pattern <- START %R% "<a" %R% ANY_CHAR %R% END
+
+clean_links <- str_view_all(somelinks, pattern = START %R% "<a" %R% ANY_CHAR %R% END)
+
+
+subset(somelinks, clean_links)
+
+str(clean_links)
+```
+
+
+```{r}
 for (url in 1:length(all_article_links)) {
-# delay function get_article to run slowly 1s
+# delay function get_article to run slowly 0.5s
  get_article_delayed <- slowly(get_article, 
-                             rate = rate_delay(1))
+                             rate = rate_delay(0.5))
   
   articles <- get_article_delayed(url = all_article_links[[url]], save = TRUE, path = "test.html")
     
@@ -276,6 +292,34 @@ for (url in 1:length(all_article_links)) {
   print(art_features)
 }
 
+# subset first 5
+test5 <- all_article_links[1:5]
+
+for (url in 1:length(test5)) {
+# delay function get_article to run slowly 0.5s
+ get_article_delayed <- slowly(get_article, 
+                             rate = rate_delay(0.5))
+  
+  articles <- get_article_delayed(url = test5[[url]], save = TRUE, path = "test.html")
+    
+  for (i in articles) {
+    # delay function get_features to run slowly 1s
+    get_features_delayed <- slowly(get_features, 
+                                   rate = rate_delay(1))
+    
+    art_features  <- get_features_delayed(i)
+    
+    # save output
+    results <- art_features
+  }
+  
+  return (results)
+}
+
+length(articles)
+results
+class(results)
+View(results)
 ```
 
 # Side bar comment 
