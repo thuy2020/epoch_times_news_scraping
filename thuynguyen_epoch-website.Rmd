@@ -17,15 +17,15 @@ Goal 2: Writing a package to scrape articles from a news website.
 - Extract all articles features of interest from the links in all_article_links.RDS.
 
 ## Would like to discuss:
-- I'm trying to get the above 2 tasks by this weekend. I hope you will have time to give me some feedback then. 
-- Should I adjust goal #2? I was thinking that after achieving goal #1, whether it is more appropriate to produce an interactive report rather than pulling up (rather simple) functions into a package. 
+- I'm trying to get the above 2 tasks by this weekend. I hope you will have time to give me some feedback then. 
+- Should I adjust goal #2? I was thinking that after achieving goal #1, whether it is more appropriate to produce an interactive report rather than pulling up (rather simple) functions into a package.
  
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r lib}
 library(rvest)
 library(tidyverse)
 library(xml2)
@@ -119,7 +119,7 @@ get_features(article)
 
 
 ```{r testing}
-# this link doesn't not give result because author name was not extracted --> need to use cbind instead of tiblle to gather all feature for final result
+# this link doesn't not give result because author name was not extracted --> need to use cbind instead of tible to gather all features for final result
 article1 <- get_article(url = "https://www.theepochtimes.com/democrats-introduce-bill-to-massively-expand-mail-in-voting_3676994.html", save = TRUE, path = "data1.html") 
 
 get_features(article1)
@@ -230,7 +230,7 @@ articles <- get_article_delayed(url = links_in_one_page[[url]], save = TRUE, pat
 
 ```
 
-# Get all urls of politics section
+# Get all urls of all articles in politics section
 
 ```{r get_page_link function, all_article_links}
 # A funtion to get page links
@@ -254,46 +254,61 @@ length(all_article_links) # hoorray 18657 articles to read
 
 # save and restore 
 saveRDS(all_article_links, file = "all_article_links")
-
-# need to make sure all the links are clean, 
-
-# random checking reveals that some links are not clean. Fore example: 
-somelinks <- all_article_links[1000:1003]
-
-#using rebus 
-library(rebus)
-pattern <- START %R% "<a" %R% ANY_CHAR %R% END
-
-clean_links <- str_view_all(somelinks, pattern = START %R% "<a" %R% ANY_CHAR %R% END)
-
-
-subset(somelinks, clean_links)
-
-str(clean_links)
 ```
 
+# cleaning links
+
+```{r cleaning a test set of links}
+all_article_links <- readRDS(file = "all_article_links")
+
+# test on a small set of links. random checking reveals that some links are not clean. eg: 
+testlinks <- all_article_links[20:30] 
+test_wrong_links <- testlinks[str_detect(testlinks, pattern = "<a") == TRUE] 
+test_correct_links <- testlinks[str_detect(testlinks, pattern = "<a") == FALSE] 
+
+
+test_wrong_links_split <- test_wrong_links %>% 
+  str_split(pattern = 'href=\"', simplify = TRUE) # split the string to take only the link part
+
+# subset to keep the column with the correct part 
+test_fixed_wrong_links <- test_wrong_links_split[, 2] %>% 
+                     str_replace(pattern = '\"', replacement = "") # get rid of the "\" part at the end 
+# detect strings that has "<a", subset to only keep those wrong links. i.e those with the defined pattern = TRUE
+
+# listing the fixed links back 
+test_total <- unlist(list(test_correct_links, test_fixed_wrong_links)) # make them a list, then unlist to get correct length --> must be some better way to do this? 
+```
+
+```{r cleaning all_article_links, save as total_links}
+
+wrong_links <- all_article_links[str_detect(all_article_links, pattern = "<a") == TRUE] 
+correct_links <- all_article_links[str_detect(all_article_links, pattern = "<a") == FALSE] 
+
+wrong_links <- wrong_links %>% 
+  str_split(pattern = 'href=\"', simplify = TRUE) # split the string to take only the link part
+
+# subset to keep the column with the correct part 
+wrong_links_fixed <- wrong_links[, 2] %>% 
+                     str_replace(pattern = '\"', replacement = "") # get rid of the "\" part at the end 
+
+total_links <- unlist(list(correct_links, wrong_links_fixed))
+
+######## test
+length(all_article_links) # 18657
+length(wrong_links) # 1607
+length(correct_links) # 17050
+length(wrong_links_fixed) # 1607
+length(total_links) # 18657
+
+typeof(total_links)
+```
+# Extracting features 
+
+## Extracting on a test set of links
 
 ```{r}
-for (url in 1:length(all_article_links)) {
-# delay function get_article to run slowly 0.5s
- get_article_delayed <- slowly(get_article, 
-                             rate = rate_delay(0.5))
-  
-  articles <- get_article_delayed(url = all_article_links[[url]], save = TRUE, path = "test.html")
-    
-  for (i in articles) {
-    # delay function get_features to run slowly 1s
-    get_features_delayed <- slowly(get_features, 
-                                   rate = rate_delay(1))
-    
-    art_features  <- get_features_delayed(i)
-  }
-  
-  print(art_features)
-}
-
 # subset first 5
-test5 <- all_article_links[1:5]
+test5 <- total_links[1:5]
 
 for (url in 1:length(test5)) {
 # delay function get_article to run slowly 0.5s
@@ -315,6 +330,32 @@ for (url in 1:length(test5)) {
   
   return (results)
 }
+
+View(results)
+dim(results) # should have 5 rows, not just 1
+```
+
+```{r}
+
+for (url in 1:length(total_links)) {
+# delay function get_article to run slowly 0.5s
+ get_article_delayed <- slowly(get_article, 
+                             rate = rate_delay(0.5))
+  
+  articles <- get_article_delayed(url = total_links[[url]], save = TRUE, path = "test.html")
+    
+  for (i in articles) {
+    # delay function get_features to run slowly 1s
+    get_features_delayed <- slowly(get_features, 
+                                   rate = rate_delay(1))
+    
+    art_features  <- get_features_delayed(i)
+  }
+  
+  print(art_features)
+}
+
+
 
 length(articles)
 results
