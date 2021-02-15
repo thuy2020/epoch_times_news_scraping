@@ -34,29 +34,19 @@ library(tidytext)
 library(stringr)
 ```
 
-# Function to get one article from a link 
+# Function to get one article from a url link 
 
 ```{r get_article}
-# a function to get an article (adapted from ICPSR 2020 course, link: )
-get_article <- function(url, save = TRUE, path = NULL){
+# a function to get an article 
+get_article <- function(url){
   link <- GET(url)
   content <- httr::content(link, "text")
-  if(save == TRUE){
-    write.table(x = content,
-                col.names = FALSE,
-                row.names = FALSE,
-                quote = FALSE,
-                file = path
-                )
-  }
+  
   return(content)
 }
 
-# get one article from a link
-article5 <- get_article(url = "https://www.theepochtimes.com/texas-governor-orders-agencies-to-sue-biden-administration-for-climate-actions-that-kill-jobs_3677062.html", save = TRUE, path = "data5.html") 
-
-# how to save all articles in a folder?
-# create path to all articles, loops through those path. 
+# apply function to get one article from a link
+article <- get_article(url = "https://www.theepochtimes.com/texas-governor-orders-agencies-to-sue-biden-administration-for-climate-actions-that-kill-jobs_3677062.html") 
 ```
 
 # Function to extract features of interest from one article
@@ -74,16 +64,17 @@ title <- article_html %>%
 # get post content class using . <div class="post_content">
 post_content <- article_html %>% 
   html_nodes(css = ".post_content") %>% 
-  html_text
+  html_text %>% 
+  str_replace("\n\t\t\t\t\t\t\t", "")
 
 # get date publish & update <span class="publish"> 
 publish_date <- article_html %>% 
   html_nodes(css = ".publish") %>% 
-  html_text()
+  html_text() 
 
-publish_date_update <- article_html %>% 
+publish_update <- article_html %>% 
   html_nodes(css = ".update") %>% 
-  html_text()
+  html_text() 
 
 # get autho's name <p><em> --> Get node <em> then extract the text
 autho_name <- html_text(xml_find_all(article_html, "//em"))
@@ -95,73 +86,33 @@ description <- article_html %>%
   html_text()
 
 # tbl <- tibble(
-#        title = title, 
-#        author = autho_name, 
+#        title = title,
+#        author = autho_name,
 #        publish_date = lubridate::mdy(publish_date),
-#        publish_update = lubridate::mdy(gsub("Updated: ", "", publish_date_update)),
+#        publish_update = lubridate::mdy(gsub("Updated: ", "", publish_update)),
 #        description = description,
 #        content = post_content)
-# ---> the above will not give result of one feature is missing
+# return (tbl)
+# ---> the above will not give result if an article has some missing features 
 
-mydata <- cbind(
-       title, 
-       autho_name, 
+all_features <- cbind(title,
+       autho_name,
        publish_date,
-       publish_date_update,
-       description, post_content)
+       publish_update,
+       description,
+       post_content)
 
-return (mydata)
+return (all_features)
 }
 
+# test the function on 1 article 
 get_features(article)
 
-```
-
-
-```{r testing}
-# this link doesn't not give result because author name was not extracted --> need to use cbind instead of tible to gather all features for final result
-article1 <- get_article(url = "https://www.theepochtimes.com/democrats-introduce-bill-to-massively-expand-mail-in-voting_3676994.html", save = TRUE, path = "data1.html") 
+# if the function uses tibble (or data_frame) to store output, apply such function to this article won't give any result because there's no author name --> need to use cbind to get all features -->then the problem is we don't have a nice tibble to work with --> need to convert to tibble
+article1 <- get_article(url = "https://www.theepochtimes.com/democrats-introduce-bill-to-massively-expand-mail-in-voting_3676994.html") 
 
 get_features(article1)
 
-article_html <- read_html(article1)
-
-# get title
-title <- article_html %>% 
-  xml_find_all("//title") %>% 
-  html_text()
-
-# get autho's name <p><em> --> Get node <em> then extract the text
-autho_name <- html_text(xml_find_all(article_html, "//em"))
-
-# get post content class using . <div class="post_content">
-post_content <- article_html %>% 
-  html_nodes(css = ".post_content") %>% 
-  html_text
-
-# get date publish & update <span class="publish"> 
-publish_date <- article_html %>% 
-  html_nodes(css = ".publish") %>% 
-  html_text()
-
-publish_date_update <- article_html %>% 
-  html_nodes(css = ".update") %>% 
-  html_text()
-
-# get description <meta name="description"
-# select all meta nodes in the tree, then go to their children that have name = description. 
-description <- article_html %>% 
-  html_nodes(xpath = '//*[@id="main"]/div/div/div[1]/div[1]/div[2]/div[5]/p[1]') %>% 
-  html_text()
-
-tbl <- cbind(
-       title, 
-       autho_name, 
-       publish_date,
-       publish_date_update,
-       description, post_content)
-
-class(tbl)
 ```
 
 # Function to get all 27 links from one page
@@ -171,14 +122,12 @@ class(tbl)
 # <li class="post_list">  --> <a title= "mcbvksd" href="a link inside"
 get_article_links <- function(url) {
   
-one_page <- get_article(url = url,
-                        save = TRUE, 
-                        path = "first_page.html")
+one_page <- get_article(url = url)
 # convert to html file to extract elements in it. 
 one_page <- read_html(one_page)
 
 # get all the articles' links in this page
-# go to all element that have class = "post_list", then go to the "a" descendant in the first position. ---> get 27 X 3 = 81 lines, 3 for each article 
+# go to all element that have class = "post_list", then go to the "a" descendant in the first position. 
 raw_list <- one_page %>% 
   html_nodes(xpath = "//*[@class = 'post_list']//a[position() = 1]") 
 
@@ -188,7 +137,7 @@ urls <- raw_list[seq(2, length(raw_list), 3)] # 27 links (articles) in a page
 # convert from html to character string in order to use stringr
 urls_char <- as.character(urls)
 
-# split the string to take only the link part
+# split the string to get only the link part
 urls_char <- str_split(
   urls_char,
   pattern = ">",
@@ -208,31 +157,34 @@ urls_clean <- str_replace(urls_char,
 return(urls_clean)
 }
 
+# apply function to get links in one page
 links_in_one_page <- get_article_links(url = "https://www.theepochtimes.com/c-us-politics/10")
 ```
 
-# A for loop to get get all 27 articles from one page
+# A for loop to get get all 27 articles from 27 links in one page
 
-```{r for loop getting all articles in 1 page}
-
+```{r for loop getting all 27 articles in 1 page}
+# create an empty list to store the result in
+test_list <- list()
 for (url in 1:length(links_in_one_page)) {
 # delay function get_article to run slowly
  get_article_delayed <- slowly(get_article, 
                              rate = rate_delay(1))
   
-articles <- get_article_delayed(url = links_in_one_page[[url]], save = TRUE, path = "test.html")
+articles <- get_article_delayed(url = links_in_one_page[[url]])
   for (i in articles) {
     art_features  <- get_features(i)
+        test_list[[i]] <- art_features
   }
   
-  print(art_features)
 }
 
+length(test_list)
 ```
 
 # Get all urls of all articles in politics section
 
-```{r get_page_link function, all_article_links}
+```{r eval=FALSE, get_page_link function, all_article_links, }
 # A funtion to get page links
 get_page_link <- function(page) {
   link <- "https://www.theepochtimes.com/c-us-politics"
@@ -276,7 +228,7 @@ test_fixed_wrong_links <- test_wrong_links_split[, 2] %>%
 # detect strings that has "<a", subset to only keep those wrong links. i.e those with the defined pattern = TRUE
 
 # listing the fixed links back 
-test_total <- unlist(list(test_correct_links, test_fixed_wrong_links)) # make them a list, then unlist to get correct length --> must be some better way to do this? 
+test_total <- unlist(list(test_correct_links, test_fixed_wrong_links)) 
 ```
 
 ```{r cleaning all_article_links, save as total_links}
@@ -291,11 +243,11 @@ wrong_links <- wrong_links %>%
 wrong_links_fixed <- wrong_links[, 2] %>% 
                      str_replace(pattern = '\"', replacement = "") # get rid of the "\" part at the end 
 
-total_links <- unlist(list(correct_links, wrong_links_fixed))
+total_links <- unlist(list(correct_links, wrong_links_fixed)) # make them a list, then unlist to get correct length --> must be some better way to do this? 
 
 ######## test
 length(all_article_links) # 18657
-length(wrong_links) # 1607
+length(wrong_links) # 1607 * 2
 length(correct_links) # 17050
 length(wrong_links_fixed) # 1607
 length(total_links) # 18657
@@ -304,38 +256,68 @@ typeof(total_links)
 ```
 # Extracting features 
 
-## Extracting on a test set of links
+## Extracting features on a test set of links
 
-```{r}
-# subset first 5
+```{r extract features from a test set}
 test5 <- total_links[1:5]
+# create an empty list to store the result
+test5_list <- list()
 
 for (url in 1:length(test5)) {
-# delay function get_article to run slowly 0.5s
+  
+ # delay function get_article to run slowly 0.5s
  get_article_delayed <- slowly(get_article, 
                              rate = rate_delay(0.5))
   
-  articles <- get_article_delayed(url = test5[[url]], save = TRUE, path = "test.html")
+  articles <- get_article_delayed(url = test5[[url]])
     
   for (i in articles) {
     # delay function get_features to run slowly 1s
-    get_features_delayed <- slowly(get_features, 
+    get_features_delayed <- slowly(get_features,
                                    rate = rate_delay(1))
-    
+
     art_features  <- get_features_delayed(i)
-    
-    # save output
-    results <- art_features
+
+    test5_list[[i]] <- art_features
+
   }
   
-  return (results)
 }
 
-View(results)
-dim(results) # should have 5 rows, not just 1
+test5_unlist <- unlist(test5_list)
+typeof(test5_list)
+length(test5_unlist) # 5 articles, 6 features, why length of 25? --> some features are NA. Eg. the 1st articles has 4, the second 5, the third 6, 
+
+###############3
+# Tried this but failed
+# library(magicfor)
+# magic_for(get_features_delayed)
+# magic_for(get_article_delayed)
+# 
+# for (url in 1:length(test5)) {
+#   
+#  # delay function get_article to run slowly 0.5s
+#  get_article_delayed <- slowly(get_article, 
+#                              rate = rate_delay(0.5))
+#   
+#   articles <- get_article_delayed(url = test5[[url]], save = TRUE, path = "test.html")
+#     
+#   for (i in articles) {
+#     # delay function get_features to run slowly 1s
+#     get_features_delayed <- slowly(get_features,
+#                                    rate = rate_delay(1))
+# 
+#     art_features  <- get_features_delayed(i)
+# 
+#   }
+#   
+# }
+# magic_result_as_dataframe() --> SUPER slow, get a column of url and 5 rows 1, 2, 3, 4, 5
 ```
 
-```{r}
+```{r get result}
+# AM I READY TO GO?
+result <- list()
 
 for (url in 1:length(total_links)) {
 # delay function get_article to run slowly 0.5s
@@ -352,48 +334,44 @@ for (url in 1:length(total_links)) {
     art_features  <- get_features_delayed(i)
   }
   
-  print(art_features)
+   result[[i]] <- art_features
 }
 
-
-
-length(articles)
-results
-class(results)
-View(results)
 ```
-
-# Side bar comment 
-
-```{r}
-# how to get the side bar comments <div id="sidebar_comments"></div>	
-article_html %>% 
-  html_nodes(css = "#sidebar_comments") %>% 
-  html_text
-
-article_html %>% 
-html_nodes(xpath = "/html/body/main") %>% 
-  html_text()
-
-```
-
 
 # Analysis
+Question: What kind of emotions are prominent in these articles?
 
-```{r analysis}
-tbl %>% 
-  unnest_tokens(word, content) %>% 
-  anti_join(stop_words) %>% 
-  count(word, sort = TRUE)
-  View()
+```{r sentiment analysis on test5_unlist}
+library(tm)
+library(qdap) # just can't get this. 
+
+
+test_source <- VectorSource(test5_unlist)
+# create a volatile corpus
+test_corpus <- VCorpus(test_source)
+
+# the 10th document object, [1] to extract the content, [2] for metatdata 
+test_corpus[[10]][1]
+# review the text of the article
+text <- content(test_corpus[[4]]) # try and error to find out the position of article body text, must be a better way
+
+my_stopwords <- c("president", stopwords("en"))
+removeWords(text, my_stopwords)
   
 ```
 
-# Other
 
-```{r unresolved}
-# get keywords <meta name="keywords" using a xpath--> how to get up to "keywords"???
-keyword <- xml_find_all(article_html, xpath = "//meta/@name/@content")
-html_nodes(css = "#content")
+```{r}
 
+as.matrix(test5_list)
+
+unlist(test5_list) %>% 
+  unnest_tokens(word, content) %>% 
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) 
+
+typeof(test5_list) # typeof list, but weird
+str(test5_unlist)
 ```
+
