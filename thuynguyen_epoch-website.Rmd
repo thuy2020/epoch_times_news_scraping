@@ -6,18 +6,25 @@ output: html_document
 ---
 ## Project's goals
 Goal 1: Scraping articles from the website https://www.theepochtimes.com/c-us-politics, extracting needed information, and putting them into an appropriate format to conduct text analysis. This is a part of a bigger research project in collaboration with the US-Vietnam Research Center, UO. 
-Goal 2: Writing a package to scrape articles from a news website.
-## Progress made:- wrote functions to get articles links, page links, extracting article features of interest.
-- Fixed empty rows problem
-- Got all article links from 691 pages in the politics section. Stored this into an RDS file (all_article_links.RDS) for later use.
-- Started to get the article features of interest using a set of articles links
+Goal 2: Conducting a preliminary analysis of the data
+
+## Progress made since last report:
+
+created 4 visualizations on a sample groups of articles: 
+- Words occur more than 3 times in each document
+- word cloud
+- Words associated with sentiments using "nrc" dictionary
+- sentiments using "bing"
 
 ## To do tasks: 
-- Some article links are not clean, which prevents getting the exact article features. These links need to be sorted out and fixed.
+
 - Extract all articles features of interest from the links in all_article_links.RDS.
+- Create visualizations on a larger sample set
+- Writing report
 
 ## Would like to discuss:
 
+- Format of the final product for submission. Probably an interactive report?
  
 
 ```{r setup, include=FALSE}
@@ -275,39 +282,6 @@ for (url in 1:length(total_links)) {
   
    result[[i]] <- art_features
 }
-```
-
-# Analysis
-Question: What kind of emotions are prominent in these articles?
-
-```{r sentiment analysis on test5_unlist} 
-library(tm)
-
-#library(qdap) # just can't get this. 
-
-TermDocumentMatrix(test_corpus)
-# create a volatile corpus
-test_corpus <- VCorpus(VectorSource(test5_unlist))
-# the 10th document object, [1] to extract the content, [2] for metatdata 
-test_corpus[[10]][1]
-# review the text of the article
-text <- content(test_corpus[[4]]) # try and error to find out the position of article body text, must be a better way
-
-
-# make a term-document matrix 
-test_tdm <- TermDocumentMatrix(test_corpus)
-
-test_m <- as.matrix(test_tdm)
-dim(test_m) # # 5 articles, 6 features, why length of 25? --> some features are NA. Eg. the 1st articles has 4, the second 5, the third 6, 
-
-test_m[c("trump", "biden"), 10:15]
-
-my_stopwords <- c("president", stopwords("en"))
-
-test_clean <- tm_map(test_corpus, removeWords, my_stopwords)
-
-content(test_corpus[[10]])
-
 ```
 
 
