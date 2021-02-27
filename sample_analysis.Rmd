@@ -1,0 +1,132 @@
+---
+title: "Untitled"
+author: "Thuy Nguyen"
+date: "2/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidytext)
+library(tm)
+```
+
+# Question: What kind of emotions are prominent in these articles?
+
+```{r }
+# adding to stop_words
+
+test_stopwords <- tribble(
+  ~ word, ~ lexicon, 
+  "president", "TEST",
+  "politics", "TEST",
+  "state", "TEST"
+  
+)
+
+my_stopwords <- stop_words %>% 
+  bind_rows(test_stopwords)
+
+
+counts <- test5_articles %>% 
+  select(internal_article_id, content) %>% 
+  unnest_tokens(word, content) %>% 
+  anti_join(my_stopwords) %>% 
+  count(internal_article_id, word)
+
+counts %>% 
+  filter(n > 3) %>% # only terms occur more than 3 times in each doc
+  mutate(word = reorder_within(word, n, internal_article_id)) %>% 
+  ggplot(aes(n, word)) +
+  geom_col() +
+  facet_wrap(~internal_article_id,
+             scales = "free_y") +
+  scale_y_reordered() +
+  ggtitle("Words occur more than 3 times in each document")
+
+```
+
+```{r}
+# word cloud
+library(wordcloud)
+
+wordcloud(words = counts$word,
+          freq = counts$n,
+          max.words = 20, 
+          color = "darkblue")
+```
+
+```{r}
+library(textdata)
+# view nrc dictionary
+get_sentiments("nrc") %>% 
+  count(sentiment) %>% 
+  arrange(desc(n))
+
+# join the data with the nrc dictionary 
+article_sentiment <- counts %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  filter(sentiment %in% c("anger", "fear", "trust", "disgust")) %>% 
+  count(word, sentiment) %>% 
+  group_by(sentiment) %>% 
+  top_n(10, n) %>% 
+  ungroup() %>% 
+  mutate(word = fct_reorder(as.factor(word), n))
+  
+ggplot(article_sentiment, aes(word, n, fill = sentiment)) +
+  geom_col() +
+  facet_wrap(~sentiment, scale = "free") +
+  coord_flip() +
+  labs(
+    title = "Words associated with sentiments",
+    x = "Count of words"
+  )
+```
+
+```{r}
+articles_pos_neg <- counts %>% 
+  inner_join(get_sentiments("bing")) %>% 
+  count(internal_article_id, sentiment) %>% 
+  spread(sentiment, n) %>% 
+  mutate(common_sentiment = positive - negative)
+
+
+articles_pos_neg %>% 
+  mutate(internal_article_id = as.numeric(internal_article_id)) %>% 
+ggplot(aes(internal_article_id, common_sentiment)) +
+         geom_col() +
+         coord_flip() +
+         labs(
+           title = "Sentiment in each article"
+         )
+
+```
+
+```{r sentiment analysis on test5_articles} 
+#library(qdap) # just can't get this. 
+
+# create a volatile corpus
+test_corpus <- VCorpus(VectorSource(test5_articles))
+
+# the 5th document object, [1] to extract the content, [2] for metatdata 
+test_corpus[[5]][1]
+
+# review the text of the article, last column
+text <- content(test_corpus[[7]]) 
+
+# make a term-document matrix 
+test_tdm <- TermDocumentMatrix(test_corpus)
+
+test_m <- as.matrix(test_tdm)
+dim(test_m) 
+
+test_m[c("trump", "biden"), 1:5]
+
+my_stopwords <- c("president", stopwords("en"))
+
+test_clean <- tm_map(test_corpus, removeWords, my_stopwords)
+
+content(test_corpus[[5]])
+
+```
+

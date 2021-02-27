@@ -17,8 +17,7 @@ Goal 2: Writing a package to scrape articles from a news website.
 - Extract all articles features of interest from the links in all_article_links.RDS.
 
 ## Would like to discuss:
-- I'm trying to get the above 2 tasks by this weekend. I hope you will have time to give me some feedback then. 
-- Should I adjust goal #2? I was thinking that after achieving goal #1, whether it is more appropriate to produce an interactive report rather than pulling up (rather simple) functions into a package.
+
  
 
 ```{r setup, include=FALSE}
@@ -85,33 +84,19 @@ description <- article_html %>%
   html_nodes(xpath = '//*[@id="main"]/div/div/div[1]/div[1]/div[2]/div[5]/p[1]') %>% 
   html_text()
 
-# tbl <- tibble(
-#        title = title,
-#        author = autho_name,
-#        publish_date = lubridate::mdy(publish_date),
-#        publish_update = lubridate::mdy(gsub("Updated: ", "", publish_update)),
-#        description = description,
-#        content = post_content)
-# return (tbl)
-# ---> the above will not give result if an article has some missing features 
-
-all_features <- cbind(title,
-       autho_name,
-       publish_date,
-       publish_update,
-       description,
-       post_content)
-
-return (all_features)
+tbl <- tibble(
+         title = ifelse(is.null(title), "", title),
+         author = ifelse(is.null(autho_name), "", autho_name), 
+         publish_date = ifelse(is.null(publish_date), "", publish_date),
+         publish_update = ifelse(is.null(publish_update), "", publish_update),
+         description = ifelse(is.null(description), "", description),
+         content = ifelse(is.null(post_content), "", post_content)
+)
+tbl
 }
 
 # test the function on 1 article 
 get_features(article)
-
-# if the function uses tibble (or data_frame) to store output, apply such function to this article won't give any result because there's no author name --> need to use cbind to get all features -->then the problem is we don't have a nice tibble to work with --> need to convert to tibble
-article1 <- get_article(url = "https://www.theepochtimes.com/democrats-introduce-bill-to-massively-expand-mail-in-voting_3676994.html") 
-
-get_features(article1)
 
 ```
 
@@ -218,7 +203,6 @@ testlinks <- all_article_links[20:30]
 test_wrong_links <- testlinks[str_detect(testlinks, pattern = "<a") == TRUE] 
 test_correct_links <- testlinks[str_detect(testlinks, pattern = "<a") == FALSE] 
 
-
 test_wrong_links_split <- test_wrong_links %>% 
   str_split(pattern = 'href=\"', simplify = TRUE) # split the string to take only the link part
 
@@ -228,7 +212,7 @@ test_fixed_wrong_links <- test_wrong_links_split[, 2] %>%
 # detect strings that has "<a", subset to only keep those wrong links. i.e those with the defined pattern = TRUE
 
 # listing the fixed links back 
-test_total <- unlist(list(test_correct_links, test_fixed_wrong_links)) 
+test_total <- unlist(c(test_correct_links, test_fixed_wrong_links)) 
 ```
 
 ```{r cleaning all_article_links, save as total_links}
@@ -243,16 +227,7 @@ wrong_links <- wrong_links %>%
 wrong_links_fixed <- wrong_links[, 2] %>% 
                      str_replace(pattern = '\"', replacement = "") # get rid of the "\" part at the end 
 
-total_links <- unlist(list(correct_links, wrong_links_fixed)) # make them a list, then unlist to get correct length --> must be some better way to do this? 
-
-######## test
-length(all_article_links) # 18657
-length(wrong_links) # 1607 * 2
-length(correct_links) # 17050
-length(wrong_links_fixed) # 1607
-length(total_links) # 18657
-
-typeof(total_links)
+total_links <- unlist(c(correct_links, wrong_links_fixed)) # make them a list, then unlist to get correct length --> must be some better way to do this? 
 ```
 # Extracting features 
 
@@ -261,59 +236,23 @@ typeof(total_links)
 ```{r extract features from a test set}
 test5 <- total_links[1:5]
 # create an empty list to store the result
-test5_list <- list()
 
-for (url in 1:length(test5)) {
-  
- # delay function get_article to run slowly 0.5s
- get_article_delayed <- slowly(get_article, 
-                             rate = rate_delay(0.5))
-  
-  articles <- get_article_delayed(url = test5[[url]])
-    
-  for (i in articles) {
-    # delay function get_features to run slowly 1s
-    get_features_delayed <- slowly(get_features,
-                                   rate = rate_delay(1))
-
-    art_features  <- get_features_delayed(i)
-
-    test5_list[[i]] <- art_features
-
-  }
-  
+get_article_features <- function(link) {
+  get_article(link) %>% 
+    get_features()
 }
 
-test5_unlist <- unlist(test5_list)
-typeof(test5_list)
-length(test5_unlist) # 5 articles, 6 features, why length of 25? --> some features are NA. Eg. the 1st articles has 4, the second 5, the third 6, 
+get_article_features(test5[1])
 
-###############3
-# Tried this but failed
-# library(magicfor)
-# magic_for(get_features_delayed)
-# magic_for(get_article_delayed)
-# 
-# for (url in 1:length(test5)) {
-#   
-#  # delay function get_article to run slowly 0.5s
-#  get_article_delayed <- slowly(get_article, 
-#                              rate = rate_delay(0.5))
-#   
-#   articles <- get_article_delayed(url = test5[[url]], save = TRUE, path = "test.html")
-#     
-#   for (i in articles) {
-#     # delay function get_features to run slowly 1s
-#     get_features_delayed <- slowly(get_features,
-#                                    rate = rate_delay(1))
-# 
-#     art_features  <- get_features_delayed(i)
-# 
-#   }
-#   
-# }
-# magic_result_as_dataframe() --> SUPER slow, get a column of url and 5 rows 1, 2, 3, 4, 5
+test5_articles <- map_df(test5, ~{
+    Sys.sleep(0.5)
+    get_article_features(.x)
+  },
+  .id = "internal_article_id")
+
+View(test5_articles)
 ```
+
 
 ```{r get result}
 # AM I READY TO GO?
@@ -336,42 +275,39 @@ for (url in 1:length(total_links)) {
   
    result[[i]] <- art_features
 }
-
 ```
 
 # Analysis
 Question: What kind of emotions are prominent in these articles?
 
-```{r sentiment analysis on test5_unlist}
+```{r sentiment analysis on test5_unlist} 
 library(tm)
-library(qdap) # just can't get this. 
 
+#library(qdap) # just can't get this. 
 
-test_source <- VectorSource(test5_unlist)
+TermDocumentMatrix(test_corpus)
 # create a volatile corpus
-test_corpus <- VCorpus(test_source)
-
+test_corpus <- VCorpus(VectorSource(test5_unlist))
 # the 10th document object, [1] to extract the content, [2] for metatdata 
 test_corpus[[10]][1]
 # review the text of the article
 text <- content(test_corpus[[4]]) # try and error to find out the position of article body text, must be a better way
 
+
+# make a term-document matrix 
+test_tdm <- TermDocumentMatrix(test_corpus)
+
+test_m <- as.matrix(test_tdm)
+dim(test_m) # # 5 articles, 6 features, why length of 25? --> some features are NA. Eg. the 1st articles has 4, the second 5, the third 6, 
+
+test_m[c("trump", "biden"), 10:15]
+
 my_stopwords <- c("president", stopwords("en"))
-removeWords(text, my_stopwords)
-  
+
+test_clean <- tm_map(test_corpus, removeWords, my_stopwords)
+
+content(test_corpus[[10]])
+
 ```
 
-
-```{r}
-
-as.matrix(test5_list)
-
-unlist(test5_list) %>% 
-  unnest_tokens(word, content) %>% 
-  anti_join(stop_words) %>% 
-  count(word, sort = TRUE) 
-
-typeof(test5_list) # typeof list, but weird
-str(test5_unlist)
-```
 
