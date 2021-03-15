@@ -29,6 +29,7 @@ created 4 visualizations on a sample groups of articles:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
 library(tidytext)
 library(tm)
 ```
@@ -113,14 +114,19 @@ articles_pos_neg <- counts %>%
   mutate(common_sentiment = positive - negative)
 
 
-articles_pos_neg %>% 
+overall <- articles_pos_neg %>% 
   mutate(internal_article_id = as.numeric(internal_article_id)) %>% 
 ggplot(aes(internal_article_id, common_sentiment)) +
-         geom_col() +
+         geom_col(aes(fill = common_sentiment), show.legend = FALSE) +
          coord_flip() +
          labs(
-           title = "Sentiment in each article"
-         )
+           title = "Measure of Overall Sentiment in Articles", 
+           x = "Articles", 
+           y = "Overall sentiment", 
+           legend = none) +
+  theme_classic()
+
+ggsave("overall.png")
 
 ```
 

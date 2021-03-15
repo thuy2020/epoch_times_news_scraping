@@ -8,25 +8,6 @@ output: html_document
 Goal 1: Scraping articles from the website https://www.theepochtimes.com/c-us-politics, extracting needed information, and putting them into an appropriate format to conduct text analysis. This is a part of a bigger research project in collaboration with the US-Vietnam Research Center, UO. 
 Goal 2: Conducting a preliminary analysis of the data
 
-## Progress made since last report:
-
-created 4 visualizations on a sample groups of articles: 
-- Words occur more than 3 times in each document
-- word cloud
-- Words associated with sentiments using "nrc" dictionary
-- sentiments using "bing"
-
-## To do tasks: 
-
-- Extract all articles features of interest from the links in all_article_links.RDS.
-- Create visualizations on a larger sample set
-- Writing report
-
-## Would like to discuss:
-
-- Format of the final product for submission. Probably an interactive report?
- 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -55,9 +36,10 @@ get_article <- function(url){
 article <- get_article(url = "https://www.theepochtimes.com/texas-governor-orders-agencies-to-sue-biden-administration-for-climate-actions-that-kill-jobs_3677062.html") 
 ```
 
-# Function to extract features of interest from one article
+# Function to extract features of interest from one article:
 
 ```{r get_features}
+
 get_features <- function(article) {
 # read in as html file 
 article_html <- read_html(article)
@@ -77,10 +59,11 @@ post_content <- article_html %>%
 publish_date <- article_html %>% 
   html_nodes(css = ".publish") %>% 
   html_text() 
+  
 
 publish_update <- article_html %>% 
   html_nodes(css = ".update") %>% 
-  html_text() 
+  html_text()  
 
 # get autho's name <p><em> --> Get node <em> then extract the text
 autho_name <- html_text(xml_find_all(article_html, "//em"))
@@ -94,8 +77,8 @@ description <- article_html %>%
 tbl <- tibble(
          title = ifelse(is.null(title), "", title),
          author = ifelse(is.null(autho_name), "", autho_name), 
-         publish_date = ifelse(is.null(publish_date), "", publish_date),
-         publish_update = ifelse(is.null(publish_update), "", publish_update),
+         publish_date = lubridate::mdy(ifelse(is.null(publish_date), "", publish_date)),
+         publish_update = lubridate::mdy(ifelse(is.null(publish_update), "", publish_update)),
          description = ifelse(is.null(description), "", description),
          content = ifelse(is.null(post_content), "", post_content)
 )
@@ -107,74 +90,102 @@ get_features(article)
 
 ```
 
-# Function to get all 27 links from one page
+# Function to get 1 article and extracting features from a link
+
+```{r get_article_features}
+
+get_article_features <- function(link) {
+  get_article(link) %>% 
+    get_features()
+}
+
+get_article_features("https://www.theepochtimes.com/texas-governor-orders-agencies-to-sue-biden-administration-for-climate-actions-that-kill-jobs_3677062.html")
+```
+
+# Testing individual function to get all post link from 1 page
+
+```{r}
+# consider 1 page as 1 article that includes many links in it, first use get_article to get that page 
+  # convert to html file to extract elements in it. 
+one_page <- get_article(url = "https://www.theepochtimes.com/c-us-politics/10") %>% 
+            read_html(one_page)
+
+# get all the articles' links in this page
+# go to all element that have class = "post_list", then go to the "a" descendant in the 1st position. 
+urls <- one_page %>% 
+  html_nodes(xpath = "//*[@class = 'post_list']//a[position() = 1]") %>% 
+  as.character() %>%  # convert from html to character string in order to use stringr
+  # this raw list has 3 elements for each article: a title, a link that we want, and a link of author 
+  # only take links start with https://www.theepochtimes.com
+  str_subset(pattern = '<a href="https://www.theepochtimes.com/') %>% 
+  # take out links of author page, keeps only actual articles link
+  str_subset(pattern = '<a href=\"https://www.theepochtimes.com/author', negate = TRUE) %>% 
+  # get rid of all the first part <a href=\" before the link
+  str_replace(pattern = '<a href=\"', 
+           replacement = "") %>% 
+  # split the string to get only the link part
+  str_split(pattern = ">", simplify = TRUE)  # use simply = TRUE to get a matrix (instead of a list), each column is an element being splited, the first column is the link we want. 
+  
+articles_links <- urls[, 1] %>% 
+# get rid of all the \" part at the end of the link
+      str_replace(pattern = '\"', 
+           replacement = "")
+
+```
+
+
+# Wrap all functions above into a single function to get all 27 links from one page
 
 ```{r get_article_links}
 # need to get all the links of post_list in a page, then get html of each link 
 # <li class="post_list">  --> <a title= "mcbvksd" href="a link inside"
 get_article_links <- function(url) {
+
+one_page <- get_article(url = url) %>% 
+            read_html(one_page)
+
+urls <- one_page %>% 
+  html_nodes(xpath = "//*[@class = 'post_list']//a[position() = 1]") %>% 
+  as.character() %>% 
+  str_subset(pattern = '<a href="https://www.theepochtimes.com/') %>% 
+  str_subset(pattern = '<a href=\"https://www.theepochtimes.com/author', negate = TRUE) %>% 
+  str_replace(pattern = '<a href=\"', 
+           replacement = "") %>% 
+  str_split(pattern = ">", simplify = TRUE)   
   
-one_page <- get_article(url = url)
-# convert to html file to extract elements in it. 
-one_page <- read_html(one_page)
-
-# get all the articles' links in this page
-# go to all element that have class = "post_list", then go to the "a" descendant in the first position. 
-raw_list <- one_page %>% 
-  html_nodes(xpath = "//*[@class = 'post_list']//a[position() = 1]") 
-
-# extract the link, starting the second in the list, increment by 3, 
-urls <- raw_list[seq(2, length(raw_list), 3)] # 27 links (articles) in a page
-
-# convert from html to character string in order to use stringr
-urls_char <- as.character(urls)
-
-# split the string to get only the link part
-urls_char <- str_split(
-  urls_char,
-  pattern = ">",
-  simplify = TRUE # to get a matrix (instead of a list), each column is an element being splited, here 27 x 3, the first column is the link we want.
-)
-
-# get rid of all the first part <a href=\" before the link
-urls_char <- str_replace(urls_char[ ,1], # only get the first column which contains links
-           pattern = '<a href=\"', 
+articles_links <- urls[, 1] %>% 
+      str_replace(pattern = '\"', 
            replacement = "")
 
-# get rid of all the \" part at the end of the link
-urls_clean <- str_replace(urls_char,
-           pattern = '\"', 
-           replacement = "")
-
-return(urls_clean)
+return(articles_links)
 }
 
 # apply function to get links in one page
 links_in_one_page <- get_article_links(url = "https://www.theepochtimes.com/c-us-politics/10")
+
+saveRDS(links_in_one_page, "links_in_one_page")
 ```
 
-# A for loop to get get all 27 articles from 27 links in one page
+# Get get all features of 27 articles from 27 links in one page
 
 ```{r for loop getting all 27 articles in 1 page}
-# create an empty list to store the result in
-test_list <- list()
-for (url in 1:length(links_in_one_page)) {
-# delay function get_article to run slowly
- get_article_delayed <- slowly(get_article, 
-                             rate = rate_delay(1))
-  
-articles <- get_article_delayed(url = links_in_one_page[[url]])
-  for (i in articles) {
-    art_features  <- get_features(i)
-        test_list[[i]] <- art_features
-  }
-  
-}
+links_in_one_page <- readRDS("links_in_one_page")
 
-length(test_list)
+# show completion percentage bar: pb$tick()
+pb <- progress::progress_bar$new(
+  format = "  downloading [:bar] :percent eta: :eta", 
+  total = 100, clear = FALSE, width= 60)
+
+# 
+test_articles <- map_df(links_in_one_page, ~{
+    pb$tick()
+    Sys.sleep(0.5)
+    get_article_features(.x)
+  },
+  .id = "article_id")
 ```
 
-# Get all urls of all articles in politics section
+# Get all urls of all articles in politics section, English edition
 
 ```{r eval=FALSE, get_page_link function, all_article_links, }
 # A funtion to get page links
@@ -185,8 +196,8 @@ get_page_link <- function(page) {
   }
     link
 }
-# Get page links, map through a vector of all pages 2:691
-all_page_links <- map_chr(2:691, get_page_link) 
+# Get page links, map through a vector of all pages 2:719 as of 3pm, March 5, 2021
+all_page_links <- map_chr(2:719, get_page_link) 
 
 # get all article links from above page links, 
 all_article_links <- map(all_page_links, slowly(get_article_links,
@@ -194,94 +205,226 @@ all_article_links <- map(all_page_links, slowly(get_article_links,
                          ) %>% 
                     unlist() 
 
-length(all_article_links) # hoorray 18657 articles to read
+length(all_article_links) # 19378
 
 # save and restore 
-saveRDS(all_article_links, file = "all_article_links")
-```
-
-# cleaning links
-
-```{r cleaning a test set of links}
-all_article_links <- readRDS(file = "all_article_links")
-
-# test on a small set of links. random checking reveals that some links are not clean. eg: 
-testlinks <- all_article_links[20:30] 
-test_wrong_links <- testlinks[str_detect(testlinks, pattern = "<a") == TRUE] 
-test_correct_links <- testlinks[str_detect(testlinks, pattern = "<a") == FALSE] 
-
-test_wrong_links_split <- test_wrong_links %>% 
-  str_split(pattern = 'href=\"', simplify = TRUE) # split the string to take only the link part
-
-# subset to keep the column with the correct part 
-test_fixed_wrong_links <- test_wrong_links_split[, 2] %>% 
-                     str_replace(pattern = '\"', replacement = "") # get rid of the "\" part at the end 
-# detect strings that has "<a", subset to only keep those wrong links. i.e those with the defined pattern = TRUE
-
-# listing the fixed links back 
-test_total <- unlist(c(test_correct_links, test_fixed_wrong_links)) 
-```
-
-```{r cleaning all_article_links, save as total_links}
-
-wrong_links <- all_article_links[str_detect(all_article_links, pattern = "<a") == TRUE] 
-correct_links <- all_article_links[str_detect(all_article_links, pattern = "<a") == FALSE] 
-
-wrong_links <- wrong_links %>% 
-  str_split(pattern = 'href=\"', simplify = TRUE) # split the string to take only the link part
-
-# subset to keep the column with the correct part 
-wrong_links_fixed <- wrong_links[, 2] %>% 
-                     str_replace(pattern = '\"', replacement = "") # get rid of the "\" part at the end 
-
-total_links <- unlist(c(correct_links, wrong_links_fixed)) # make them a list, then unlist to get correct length --> must be some better way to do this? 
-```
-# Extracting features 
-
-## Extracting features on a test set of links
-
-```{r extract features from a test set}
-test5 <- total_links[1:5]
-# create an empty list to store the result
-
-get_article_features <- function(link) {
-  get_article(link) %>% 
-    get_features()
-}
-
-get_article_features(test5[1])
-
-test5_articles <- map_df(test5, ~{
-    Sys.sleep(0.5)
-    get_article_features(.x)
-  },
-  .id = "internal_article_id")
-
-View(test5_articles)
+saveRDS(all_article_links, file = "all_articles_links.RDS")
 ```
 
 
-```{r get result}
-# AM I READY TO GO?
-result <- list()
+```{r extract features from a test set of 50 article}
+all_articles_links <- readRDS("all_articles_links")
 
-for (url in 1:length(total_links)) {
-# delay function get_article to run slowly 0.5s
- get_article_delayed <- slowly(get_article, 
-                             rate = rate_delay(0.5))
-  
-  articles <- get_article_delayed(url = total_links[[url]], save = TRUE, path = "test.html")
-    
-  for (i in articles) {
-    # delay function get_features to run slowly 1s
-    get_features_delayed <- slowly(get_features, 
-                                   rate = rate_delay(1))
-    
-    art_features  <- get_features_delayed(i)
-  }
-  
-   result[[i]] <- art_features
-}
+test <- all_articles_links[1:50] 
+
+# show completion percentage bar: pb$tick()
+pb <- progress::progress_bar$new(
+  format = "  downloading [:bar] :percent eta: :eta", 
+  total = 100, clear = FALSE, width= 60)
+
+
+test_50articles <- map_df(test, ~{
+pb$tick()
+    Sys.sleep(1) # remember to put this line before the function, otherwise get 0 rows
+  get_article_features(.x)
+    },
+  .id = "article_id") # create id for each article
+
+# save and restore 
+saveRDS(test_50articles, file = "test_50articles.RDS")
+
 ```
 
+## Extracting features from all links
+
+```{r get_article_features}
+ articles_links_1to1000 <- all_articles_links[1:1000]
+#====
+articles_features_english_1to1000 <- map_df(articles_links_1to1000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+# error 1: running for more than 1 day without giving me anything
+# error 2: Error in curl::curl_fetch_memory(url, handle = handle) : 
+ # Maximum (10) redirects followed, gurrrrrrrr
+# error 4: Error in pb_tick(self, private, len, tokens) : !self$finished is not TRUE
+# error 5: Error in curl::curl_fetch_memory(url, handle = handle) : Maximum (10) redirects followed
+
+saveRDS(articles_features_english_1to1000, "articles_features_english_1to1000.RDS")
+
+#====
+
+articles_links_1001to2000 <- all_articles_links[1001:2000]
+
+articles_features_english_1001to2000 <- map_df(articles_links_1001to2000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+
+str(articles_features_english_1001to2000)
+saveRDS(articles_features_english_1001to2000, "articles_features_english_1001to2000.RDS")
+#====
+
+articles_links_2001to3000 <- all_articles_links[2001:3000]
+
+articles_features_english_2001to3000 <- map_df(articles_links_2001to3000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+
+str(articles_features_english_2001to3000)
+saveRDS(articles_features_english_2001to3000, "articles_features_english_2001to3000.RDS")
+
+#====
+# this error of run 3001-4000: Error in curl::curl_fetch_memory(url, handle = handle) : Maximum (10) redirects followed --> need to break down into small chunks --> found out this chunk caused error: articles_links_3301to3400 <- all_articles_links[3301:3400] --> skip it. 
+articles_links_3001to3200 <- all_articles_links[3001:3200]
+
+articles_features_english_3001to3200 <- map_df(articles_links_3001to3200, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+
+saveRDS(articles_features_english_3001to3200, "articles_features_english_3001to3200.RDS")
+
+#-----
+articles_links_3201to3300 <- all_articles_links[3201:3300]
+
+articles_features_english_3201to3300 <- map_df(articles_links_3201to3300, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+saveRDS(articles_features_english_3201to3300, "articles_features_english_3201to3300.RDS")
+#-------
+articles_links_3401to3500 <- all_articles_links[3401:3500]
+articles_features_english_3401to3500 <- map_df(articles_links_3401to3500, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id")
+saveRDS(articles_features_english_3401to3500, "articles_features_english_3401to3500.RDS")
+
+#-----
+articles_links_3501to4000 <- all_articles_links[3501:4000]
+
+articles_features_english_3501to4000 <- map_df(articles_links_3501to4000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+saveRDS(articles_features_english_3501to4000, "articles_features_english_3501to4000.RDS")
+#====
+articles_links_4001to5000 <- all_articles_links[4001:5000]
+
+articles_features_english_4001to5000 <- map_df(articles_links_4001to5000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+str(articles_features_english_4001to5000)
+
+saveRDS(articles_features_english_4001to5000, "articles_features_english_4001to5000.RDS")
+#====
+articles_links_5001to6000 <- all_articles_links[5001:6000]
+
+articles_features_english_5001to6000 <- map_df(articles_links_5001to6000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+str(articles_features_english_5001to6000)
+saveRDS(articles_features_english_5001to6000, "articles_features_english_5001to6000.RDS")
+
+```
+
+```{r}
+articles_links_6001to8000 <- all_articles_links[6001:8000]
+
+articles_features_english_6001to8000 <- map_df(articles_links_6001to8000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+str(articles_features_english_6001to8000)
+
+saveRDS(articles_features_english_6001to8000, "articles_features_english_6001to8000.RDS")
+
+#=======
+articles_links_8001to10000 <- all_articles_links[8001:10000]
+
+articles_features_english_8001to10000 <- map_df(articles_links_8001to10000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+str(articles_features_english_8001to10000)
+
+saveRDS(articles_features_english_8001to10000, "articles_features_english_8001to10000.RDS")
+
+#=======
+articles_links_10001to13000 <- all_articles_links[10001:13000]
+
+articles_features_english_10001to13000 <- map_df(articles_links_10001to13000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+
+str(articles_features_english_10001to13000)
+
+saveRDS(articles_features_english_10001to13000, "articles_features_english_10001to13000.RDS")
+
+
+#=======
+articles_links_13001to16000 <- all_articles_links[13001:16000]
+
+articles_features_english_13001to16000 <- map_df(articles_links_13001to16000, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+
+str(articles_features_english_13001to16000)
+
+saveRDS(articles_features_english_13001to16000, "articles_features_english_13001to16000.RDS")
+
+#=======
+articles_links_16001toend <- all_articles_links[16001:length(all_article_links)]
+
+articles_features_english_16001toend <- map_df(articles_links_16001toend, ~{
+        Sys.sleep(0.5)
+        get_article_features(.x)
+},
+  .id = "article_id") 
+
+str(articles_features_english_16001toend)
+
+saveRDS(articles_features_english_16001toend, "articles_features_english_16001toend.RDS")
+```
+
+```{r}
+slice1 <- readRDS("articles_features_english_1to1000.RDS")
+slice2 <- readRDS("articles_features_english_1001to2000.RDS")
+slice3 <- readRDS("articles_features_english_2001to3000.RDS")
+slice4 <- readRDS("articles_features_english_3001to3200.RDS")
+slice5 <- readRDS("articles_features_english_3201to3300.RDS")
+slice6 <- readRDS("articles_features_english_3401to3500.RDS")
+slice7 <- readRDS("articles_features_english_3501to4000.RDS")
+slice8 <- readRDS("articles_features_english_4001to5000.RDS")
+slice9 <- readRDS("articles_features_english_5001to6000.RDS")
+slice10 <- readRDS("articles_features_english_6001to8000.RDS")
+slice11 <- readRDS("articles_features_english_8001to10000.RDS")
+slice12 <- readRDS("articles_features_english_10001to13000.RDS")
+slice13 <- readRDS("articles_features_english_13001to16000.RDS")
+slice14 <- readRDS("articles_features_english_16001toend.RDS")
+
+all_articles_features_english <- bind_rows(slice1, slice2, slice3, slice4, slice5, slice6, slice7, slice8, slice9, slice10, slice11, slice12, slice13, slice14)
+str(all_articles_features_english) # tibble [19,278 × 7]
+
+saveRDS(all_articles_features_english, "all_articles_features_english.RDS")
+```
 
