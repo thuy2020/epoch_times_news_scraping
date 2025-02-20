@@ -214,12 +214,14 @@ dtm_freq <- corpus_clean %>%
 df_freq <- data.frame(word = names(dtm_freq),
                       freq = dtm_freq) 
 
-mainword <- wordcloud(words = df_freq$word,
+
+# Create the word cloud
+wordcloud(words = df_freq$word,
           freq = df_freq$freq,
           min.freq = 250,
           random.order = FALSE,
           colors = brewer.pal(6, "Dark2"))
-ggsave("output/mainword.png", mainword, width = 6, height = 4, dpi = 300)
+
 
 ```
 
@@ -348,7 +350,6 @@ senti_plot <- get_sentences(foo$description) %$%
 
 sentiment <- plot(senti_plot)
 
-ggsave("output/sentiment.png", sentiment, width = 6, height = 4, dpi = 300)
 ```
 
 

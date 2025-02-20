@@ -1,7 +1,3 @@
----
-title: "Epoch Times Political News Analysis"
-output: github_document
----
 
 # Epoch Times Political News Analysis
 
@@ -32,15 +28,12 @@ This project scrapes articles from [The Epoch Times Politics section](https://ww
 
 ![Missing data](output/missing_data.png)
 
-Articles published in the Politics section by year
 
 ![Articles published in the Politics section by year](output/num_article.png)
 
-Weekly Distribution of Articles
+
 ![Weekly Distribution of Articles](output/weekly.png)
 
-Frequency of words
-![Frequency of words](output/mainword.png)
 
 ## Sentiment analysis
 
@@ -48,4 +41,4 @@ Frequency of words
 
 ## Exploring main theme
 
-![Exploring main theme](mainword.png)
+![Frequency of words](output/mainwords.png)
