@@ -36,7 +36,7 @@ data <- readRDS("data/all_articles_features_english.RDS") %>%  mutate(across(whe
 
 ```{r missing data}
 #missing data
-data %>% skim() %>% 
+missing_data <- data %>% skim() %>% 
   filter(n_missing != 0) %>%
   as_tibble() %>%
   select(complete_rate, skim_variable, n_missing) %>%
@@ -60,8 +60,9 @@ data %>% skim() %>%
                                )) +
   labs(
     title = "Missing Data (%)",
-    caption = "Source: ",
+    x = ""
   )
+ggsave("output/missing_data.pdf", missing_data, width = 6, height = 4, dpi = 300)
 ```
 
 ```{r Number of Titles per year}
@@ -240,8 +241,6 @@ wordcloud(words = df_freq$word,
 
 ### Abortion, Immigrant, Antifa, BLMs
 ```{r}
-abortion <- data %>% 
-filter(str_detect(title, '.*(?i) abortion.*'))
 
 immigrant <- data %>% 
 filter(str_detect(title, '.*(?i) immigrant.*'))
@@ -249,22 +248,6 @@ filter(str_detect(title, '.*(?i) immigrant.*'))
 # only 1 time word "undocumented" in title
 data %>% 
 filter(str_detect(title, '.*(?i) undocumented.*'))
-
-# only 2 in description 
-data %>% 
-filter(str_detect(description, '.*(?i) undocumented.*'))
-
-# in content 
-data %>% 
-filter(str_detect(content, '.*(?i) undocumented.*'))
-
-(data %>% filter(title == "‘Wokeism Is the Next or the New Secular Religion’: Young Asian-American Conservative"))$content
-
-antifa_blm <- data %>% 
-filter(str_detect(title, '.*(?i) (antifa|farleft|far-left|BLM|Anarchists).*'))
-
-data %>% 
-filter(str_detect(title, '.*(?i) mainstream|fakenews.*'))
 
 (antifa_blm %>% filter(title == "Law Professor at Senate Hearing: Antifa Is Winning on College Campuses"))$content
 
