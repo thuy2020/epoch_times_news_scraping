@@ -62,7 +62,7 @@ missing_data <- data %>% skim() %>%
     title = "Missing Data (%)",
     x = ""
   )
-ggsave("output/missing_data.pdf", missing_data, width = 6, height = 4, dpi = 300)
+ggsave("output/missing_data.png", missing_data, width = 6, height = 4, dpi = 300)
 ```
 
 ```{r Number of Titles per year}

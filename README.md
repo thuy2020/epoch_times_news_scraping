@@ -8,4 +8,4 @@ Conducting a preliminary analysis of the data
 
 File scraping_guide_step_by_step.Rmd provide guidance how to reproduce the result. It scrape articles in the "Politics" section of the Epoch Times between 2016 ~ 2022.
 
-![Missing data](output/missing_data.pdf)
+![Missing data](output/missing_data.png)
