@@ -1,7 +1,7 @@
 
 # Epoch Times Political News Analysis
 
-This repo contains all the code for scraping and data analysis used in the published research.  
+This repo contains all the code for scraping and data analysis used in the published research on Howard Journal of Communications.  
 Read the research [here](https://www.tandfonline.com/doi/abs/10.1080/10646175.2025.2455590).
 
 ### 📚 **Cite the research:**  
@@ -37,8 +37,8 @@ This project scrapes articles from [The Epoch Times Politics section](https://ww
 
 ## Sentiment analysis
 
-![Emotional valance](sentiment.png)
+![Emotional valance](output/sentiment.png)
 
-## Exploring main theme
+## Exploring main themes
 
 ![Frequency of words](output/mainwords.png)
