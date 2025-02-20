@@ -1,18 +1,12 @@
 ---
-title: "EDLD 609: Scrcaping The Epoch Times website"
+title: "Scaping news from theepochtimes.com"
 author: "Thuy Nguyen"
 date: "1/20/2021"
 output: html_document
 ---
-## Project's goals
-Goal 1: Scraping articles from the website https://www.theepochtimes.com/c-us-politics, extracting needed information, and putting them into an appropriate format to conduct text analysis. This is a part of a bigger research project in collaboration with the US-Vietnam Research Center, UO. 
-Goal 2: Conducting a preliminary analysis of the data
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-```
-
-```{r lib}
 library(rvest)
 library(tidyverse)
 library(xml2)
@@ -163,13 +157,13 @@ return(articles_links)
 # apply function to get links in one page
 links_in_one_page <- get_article_links(url = "https://www.theepochtimes.com/c-us-politics/10")
 
-saveRDS(links_in_one_page, "links_in_one_page")
+#saveRDS(links_in_one_page, "data/links_in_one_page")
 ```
 
 # Get get all features of 27 articles from 27 links in one page
 
 ```{r for loop getting all 27 articles in 1 page}
-links_in_one_page <- readRDS("links_in_one_page")
+links_in_one_page <- readRDS("data/links_in_one_page")
 
 # show completion percentage bar: pb$tick()
 pb <- progress::progress_bar$new(

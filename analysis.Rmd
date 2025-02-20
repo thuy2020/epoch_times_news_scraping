@@ -1,0 +1,388 @@
+---
+title: "Untitled"
+author: "Thuy Nguyen"
+date: "2/22/2021"
+output: html_document
+---
+
+https://www.kaggle.com/khsamaha/reddit-vaccine-myths-eda-and-text-analysis/report
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# library(magrittr) # pipes %$% for sentimentR package
+# library(lubridate)
+# library(scales)
+# library(wordcloud)
+# library(plotly)
+# library(skimr)
+# library(janitor)
+# library(sentimentr)
+# library(widyr)
+
+library(pacman)
+p_load(tidyverse, dplyr, tm, ggplot2, wordcloud, rio)
+theme_set(theme_light())
+
+```
+
+# Data Overview
+
+```{r data}
+data <- readRDS("data/all_articles_features_english.RDS") %>%  mutate(across(where(is.character), tolower)) %>% 
+  clean_names()
+
+```
+
+```{r missing data}
+#missing data
+data %>% skim() %>% 
+  filter(n_missing != 0) %>%
+  as_tibble() %>%
+  select(complete_rate, skim_variable, n_missing) %>%
+  mutate(missing_rate = round(abs(complete_rate - 1) * 100, 1)) %>%
+  ggplot(aes(x = fct_reorder(skim_variable, n_missing),
+    y = missing_rate,
+    fill = skim_variable,
+    label = paste0(missing_rate, "%")
+  )) +
+  geom_col() +
+  geom_text(
+    size = 3,
+    vjust = 0.25,
+    col = "black"
+  ) +
+  coord_flip() +
+  theme(legend.position = "none") +
+  scale_y_continuous(label = label_percent(scale = 1)) +
+  scale_fill_manual(values = c("#e41a1c", "#081d58",
+                               "#984ea3", "#253494", "#1b7837"
+                               )) +
+  labs(
+    title = "Missing Data (%)",
+    caption = "Source: ",
+  )
+```
+
+```{r Number of Titles per year}
+data %>%
+  select(publish_date) %>%
+  mutate(year = year(publish_date)) %>%
+  count(year, sort = TRUE) %>%
+  ggplot(aes(x = year,
+             y = n,
+             label = n)) +
+  geom_line(show.legend = FALSE,
+            col = "steelblue",
+            size = 2) +
+  geom_label(
+    vjust = -0.5,
+    size = 4,
+    col = "darkgreen",
+    label.size = 1
+  ) +
+  scale_fill_viridis(discrete = TRUE, option = "E") +
+  scale_y_continuous(expand = expansion(add = c(15, 100))) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(strip.background = element_rect(fill = "black")) +
+  theme(strip.text = element_text(colour = 'white')) +
+  labs(
+    title = "Number of Titles per year",
+    caption = "Source: ",
+    x = "Year",
+    y = "Number of Titles"
+  )
+```
+
+```{r data hist plot, fig.width=6, fig.height=3, dev='svg', echo = FALSE}
+# use out.width='100%' if need full-size graph
+# density of article published overtime
+data %>% 
+  select(publish_date) %>% 
+  drop_na() %>% 
+  add_count(week = lubridate::floor_date(publish_date, "week")) %>% 
+  ggplot(aes(week)) +
+  geom_density(color = "darkgreen", size = 1) +
+  labs(
+    title = "Weekly Distribution of Articles in the Sample Set", 
+    x = "",
+    y = ""
+  ) +
+  theme_minimal()
+```
+
+```{r Total # of Titles}
+d_month_year <- data %>%   
+select(publish_date) %>% 
+  mutate(year = year(publish_date),
+                     month = month(publish_date, label = TRUE)) %>% 
+  count(year, month, sort = TRUE)
+
+formattable(head(d_month_year, 12),
+            col.names = c("Year", "Month", "Total # of Titles"),
+            align = c("r", rep("r", NCOL(n) - 1)),
+            list(n = formatter("span",
+  style = n ~ style(
+    display = "inline-block",
+    direction = "rtl",
+    "border-radius" = "8px",
+    "padding-right" = "2px",
+    "background-color" = csscolor("#1b7837"),
+    width = percent(proportion(n)),
+    "font-family" = "verdana",
+    "font-size" = 10,
+    color = csscolor("white")
+  ))))
+```
+
+#Main topics
+
+```{r mystopwords, functions}
+mystopwords <- c("“", "“", "“", "”","’s", "‘","‘", "’", "’", "said", "will","’re", "—", "says", "talks", "calls", "call", "donald", "top", "back", "officials",
+                 "didn’t", "can", "don’t", "wont", "sen", "want", "just", "asked", "first", "now", "get", "week",  "according", "made", "going", "including", "announces",
+                 "one", "two", "second",
+                 "jan", "oct", "wednesday",
+                 "another", "called", "month", "last", "also", "told", "said", "people", "take", "used", "added", "wrote" 
+                 )
+
+frequent_words_title <- function(df){
+#clean text
+corpus_clean <- Corpus(VectorSource(df$title)) %>% 
+  tm_map(content_transformer(tolower)) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removeWords, c(stopwords(kind = "en"), mystopwords)) %>% # custom stopwords for this subset
+  tm_map(stripWhitespace)
+
+# count frequency of words
+dtm_freq <- corpus_clean %>% 
+  DocumentTermMatrix() %>% 
+  as.matrix() %>% 
+  colSums() %>% 
+  sort(decreasing = TRUE)
+
+df_freq <- data.frame(word = names(dtm_freq),
+                      freq = dtm_freq) 
+return(df_freq)
+}
+
+frequent_words_description <- function(df){
+#clean text
+corpus_clean <- Corpus(VectorSource(df$description)) %>% 
+  tm_map(content_transformer(tolower)) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removeWords, c(stopwords(kind = "en"), mystopwords)) %>% # custom stopwords for this subset
+  tm_map(stripWhitespace)
+
+# count frequency of words
+dtm_freq <- corpus_clean %>% 
+  DocumentTermMatrix() %>% 
+  as.matrix() %>% 
+  colSums() %>% 
+  sort(decreasing = TRUE)
+
+df_freq <- data.frame(word = names(dtm_freq),
+                      freq = dtm_freq) 
+return(df_freq)
+}
+
+frequent_words_content <- function(df){
+#clean text
+corpus_clean <- Corpus(VectorSource(df$content)) %>% 
+  tm_map(content_transformer(tolower)) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removeWords, c(stopwords(kind = "en"), mystopwords)) %>% # custom stopwords for this subset
+  tm_map(stripWhitespace)
+
+# count frequency of words
+dtm_freq <- corpus_clean %>% 
+  DocumentTermMatrix() %>% 
+  as.matrix() %>% 
+  colSums() %>% 
+  sort(decreasing = TRUE)
+
+df_freq <- data.frame(word = names(dtm_freq),
+                      freq = dtm_freq) 
+return(df_freq)
+}
+
+```
+
+## Find the main topics in all headlines
+```{r}
+#clean text
+corpus_clean <- Corpus(VectorSource(data$title)) %>% 
+  tm_map(content_transformer(tolower)) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removeWords, c(stopwords(kind = "en"), mystopwords)) %>% # custom stopwords for this subset
+  tm_map(stripWhitespace)
+
+# count frequency of words
+dtm_freq <- corpus_clean %>% 
+  DocumentTermMatrix() %>% 
+  as.matrix() %>% 
+  colSums() %>% 
+  sort(decreasing = TRUE)
+
+df_freq <- data.frame(word = names(dtm_freq),
+                      freq = dtm_freq) 
+
+wordcloud(words = df_freq$word,
+          freq = df_freq$freq,
+          min.freq = 250,
+          random.order = FALSE,
+          colors = brewer.pal(6, "Dark2"))
+
+```
+
+### Abortion, Immigrant, Antifa, BLMs
+```{r}
+abortion <- data %>% 
+filter(str_detect(title, '.*(?i) abortion.*'))
+
+immigrant <- data %>% 
+filter(str_detect(title, '.*(?i) immigrant.*'))
+
+# only 1 time word "undocumented" in title
+data %>% 
+filter(str_detect(title, '.*(?i) undocumented.*'))
+
+# only 2 in description 
+data %>% 
+filter(str_detect(description, '.*(?i) undocumented.*'))
+
+# in content 
+data %>% 
+filter(str_detect(content, '.*(?i) undocumented.*'))
+
+(data %>% filter(title == "‘Wokeism Is the Next or the New Secular Religion’: Young Asian-American Conservative"))$content
+
+antifa_blm <- data %>% 
+filter(str_detect(title, '.*(?i) (antifa|farleft|far-left|BLM|Anarchists).*'))
+
+data %>% 
+filter(str_detect(title, '.*(?i) mainstream|fakenews.*'))
+
+(antifa_blm %>% filter(title == "Law Professor at Senate Hearing: Antifa Is Winning on College Campuses"))$content
+
+(data %>% 
+filter(str_detect(title, '.*(?i) (femin).*')))$content
+
+```
+
+
+### China, CCP
+
+```{r}
+# categorize the target of the article
+china_target <- china %>% 
+  select(-c(author, publish_update)) %>% drop_na() %>% #slice(260:656) %>% March 10, categorize up to here
+  mutate(target = case_when((str_detect(title, '.*(?i) (trump|cruz|pompeo|Perry|Cotton|Banks|Florida|republican|Stefanik|Bannon|Tillerson|Hawley)|(Rep. Green).*')) ~ "Rep", 
+                            (str_detect(title, '^(Trump|Bannon|Tillerson|Florida|Republicans|Stefanik|Cruz|Blackburn|Pompeo|Loeffler|GOP|Powell|Giuliani|Esper|Barr|McConnell|Mnuchin)|(Jack Posobiec)|(Patrick Byrne)|(Sean Hannity).*')) ~ "Rep",
+                            
+                            (str_detect(title, '.*(?i) (biden|pelosi|obama|Hillary|Democrats).*')) ~ "Dem", 
+                            (str_detect(title, '^(Biden|Hillary|Clinton|Blinken|Pelosi).*')) ~ "Dem")) %>% drop_na()
+china_target
+```
+
+### CCP virus
+```{r}
+# setting up the stage
+ccp_virus <- china %>% 
+  #filter(str_detect(title, '.*(?i) covid.*')) # 3 time
+  #filter(str_detect(title, '.*(?i) coronavirus.*')) # 3 times, all before March 18. Trump posted "chinese virus March 16.
+  filter(str_detect(title, '.*(?i) virus.*')) %>% arrange(publish_date) # from March 18
+
+(china %>% filter(title == "Trump: Spread of CCP Virus Not the Fault of Asian Americans"))$content
+```
+
+### China interfere in election
+```{r}
+# any kind of coverage about election before: russia and election
+data %>% 
+  filter(str_detect(title, '(?=.*Election.*)(?=.*Russia.*)')) %>% arrange(publish_date) # both words, in any names order ))
+  
+china_USelection <- china %>% 
+    filter(str_detect(title, '.*(?i) election')) 
+
+china_USelection %>% arrange(publish_date) %>% select(title, publish_date, description)
+china_USelection$title
+
+election_wordcloud <- frequent_words_title(china_USelection) %>% 
+  filter(word %in% c( "china", "interference", "voting", "fraud", "ccp", "threat", "targeting", "security","communist", "interfered", "insider", "targeted", "sowed", "war’", "involved’", "breached", "hack"))
+
+wordcloud(words = election_wordcloud$word,
+          freq = election_wordcloud$freq,
+          min.freq = 1,
+          random.order = FALSE,
+          colors = brewer.pal(6, "Dark2"))
+```
+
+```{r}
+china_target %>% 
+  mutate(publish_date = as.POSIXct(publish_date),
+        publish_month = floor_date(publish_date, "month")) %>% 
+  group_by(publish_month) %>% add_count(target) %>% select(-c(publish_date)) -> china_target_dp
+
+china_target_dp %>% 
+  ggplot(aes(publish_month, n, group = target)) +
+  geom_line(aes(color = target))
+```
+
+## Using experts
+
+```{r}
+expert <- data %>% filter(str_detect(title, '.*(?i) expert.*'))
+
+data %>% filter(str_detect(title, '.*(?i) Giuliani.*'))
+
+data %>% filter(str_detect(title, '.*(?i) (Sidney Powell).*')) %>% select(title, publish_date) %>% arrange(publish_date)
+
+data %>% filter(str_detect(title, '.*(?i) (Patrick Byrne).*')) %>% arrange(publish_date)
+
+data %>% 
+    filter(str_detect(title, '.*(Gordon Chang).*')) # china Analyst
+
+(expert %>% filter(title == "The Left’s Attack on the Nuclear Family Echoes Language of CCP: Morgan Zegers"))$content
+```
+
+
+# Sentiment Analysis
+Opinion Lexicon of Bing Liu (Hu and Liu, 2004) manually selected lexicon of around 6800 terms, only positive and negative.
+
+aFinn (Nielsen, 2011), Lexicon of words manually rated for valence scores with an integer between -5 and 5.
+
+NRC Sentiment Lexicon (Mohammad et al., 2013) This open source lexicon was key in the winning entry for the last two years. 
+NRC: This dataset was published in Saif M. Mohammad and Peter Turney. (2013), 
+Crowdsourcing a Word-Emotion Association Lexicon.'' Computational Intelligence, 29(3): 436-465.
+It is a large, automatically compiled resource that uses seed hashtags that carry unambiguous, strong sentiment as proxy for true tweet sentiment.
+
+```{r}
+# source https://www.kaggle.com/andradaolteanu/bing-nrc-afinn-lexicons/version/1?select=Afinn.csv
+afinn <- import(here::here("data/Afinn.csv"))
+bing <- import(here::here("data/Bing.csv"))
+nrc <- import(here::here("data/NRC.csv"))
+StopWords <- get_stopwords(source = "smart")
+
+```
+
+Emotional valence is defined as "the value associated with a stimulus as expressed on a continuum from pleasant to unpleasant or from attractive to aversive. In factor analysis and multidimensional scaling studies, emotional valence is one of two axes (or dimensions) on which an emotion can be located, the other axis being arousal (expressed as a continuum from high to low). For example, happiness is typically characterized by pleasant valence and relatively high arousal, whereas sadness or depression is typically characterized by unpleasant valence and relatively low arousal". (https://dictionary.apa.org/emotional-valence)
+
+
+```{r}
+data %>% select(publish_date, description) %>% 
+  arrange(publish_date) -> foo
+
+senti_plot <- 
+  get_sentences(foo$description) %$%
+  sentiment(foo$description) %>% 
+  mutate(sentiment = round(sentiment, 2))
+plot(senti_plot)
+```
+
+
+
+
