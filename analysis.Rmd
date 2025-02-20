@@ -66,9 +66,10 @@ ggsave("output/missing_data.png", missing_data, width = 6, height = 4, dpi = 300
 ```
 
 ```{r Number of Titles per year}
-data %>%
+num_article <- data %>%
   select(publish_date) %>%
-  mutate(year = year(publish_date)) %>%
+  mutate(year = year(publish_date),
+         year = as.integer(year)) %>%
   count(year, sort = TRUE) %>%
   ggplot(aes(x = year,
              y = n,
@@ -84,15 +85,18 @@ data %>%
   ) +
   scale_fill_viridis(discrete = TRUE, option = "E") +
   scale_y_continuous(expand = expansion(add = c(15, 100))) +
-  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  theme(axis.text.x = element_text()) +
   theme(strip.background = element_rect(fill = "black")) +
   theme(strip.text = element_text(colour = 'white')) +
   labs(
-    title = "Number of Titles per year",
-    caption = "Source: ",
+    title = "Articles published in the Politics section by year",
+    caption = "Source: Data collected by author",
     x = "Year",
-    y = "Number of Titles"
+    y = "Number of Artiles"
   )
+
+ggsave("output/num_article.png", num_article, width = 6, height = 4, dpi = 300)
 ```
 
 ```{r data hist plot, fig.width=6, fig.height=3, dev='svg', echo = FALSE}
