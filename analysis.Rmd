@@ -26,7 +26,7 @@ theme_set(theme_light())
 
 ```
 
-# Data Overview
+# Data description
 
 ```{r data}
 data <- readRDS("data/all_articles_features_english.RDS") %>%  mutate(across(where(is.character), tolower)) %>% 
@@ -102,43 +102,22 @@ ggsave("output/num_article.png", num_article, width = 6, height = 4, dpi = 300)
 ```{r data hist plot, fig.width=6, fig.height=3, dev='svg', echo = FALSE}
 # use out.width='100%' if need full-size graph
 # density of article published overtime
-data %>% 
+weekly <- data %>% 
   select(publish_date) %>% 
   drop_na() %>% 
   add_count(week = lubridate::floor_date(publish_date, "week")) %>% 
   ggplot(aes(week)) +
-  geom_density(color = "darkgreen", size = 1) +
+  geom_density(color = "#944C34", size = 1) +
   labs(
-    title = "Weekly Distribution of Articles in the Sample Set", 
+    title = "Weekly Distribution of Articles", 
     x = "",
     y = ""
   ) +
   theme_minimal()
+
+ggsave("output/weekly.png", weekly, width = 6, height = 4, dpi = 300)
 ```
 
-```{r Total # of Titles}
-d_month_year <- data %>%   
-select(publish_date) %>% 
-  mutate(year = year(publish_date),
-                     month = month(publish_date, label = TRUE)) %>% 
-  count(year, month, sort = TRUE)
-
-formattable(head(d_month_year, 12),
-            col.names = c("Year", "Month", "Total # of Titles"),
-            align = c("r", rep("r", NCOL(n) - 1)),
-            list(n = formatter("span",
-  style = n ~ style(
-    display = "inline-block",
-    direction = "rtl",
-    "border-radius" = "8px",
-    "padding-right" = "2px",
-    "background-color" = csscolor("#1b7837"),
-    width = percent(proportion(n)),
-    "font-family" = "verdana",
-    "font-size" = 10,
-    color = csscolor("white")
-  ))))
-```
 
 #Main topics
 
@@ -235,17 +214,17 @@ dtm_freq <- corpus_clean %>%
 df_freq <- data.frame(word = names(dtm_freq),
                       freq = dtm_freq) 
 
-wordcloud(words = df_freq$word,
+mainword <- wordcloud(words = df_freq$word,
           freq = df_freq$freq,
           min.freq = 250,
           random.order = FALSE,
           colors = brewer.pal(6, "Dark2"))
+ggsave("output/mainword.png", mainword, width = 6, height = 4, dpi = 300)
 
 ```
 
 ### Abortion, Immigrant, Antifa, BLMs
 ```{r}
-
 immigrant <- data %>% 
 filter(str_detect(title, '.*(?i) immigrant.*'))
 
@@ -363,11 +342,13 @@ Emotional valence is defined as "the value associated with a stimulus as express
 data %>% select(publish_date, description) %>% 
   arrange(publish_date) -> foo
 
-senti_plot <- 
-  get_sentences(foo$description) %$%
+senti_plot <- get_sentences(foo$description) %$%
   sentiment(foo$description) %>% 
   mutate(sentiment = round(sentiment, 2))
-plot(senti_plot)
+
+sentiment <- plot(senti_plot)
+
+ggsave("output/sentiment.png", sentiment, width = 6, height = 4, dpi = 300)
 ```
 
 
